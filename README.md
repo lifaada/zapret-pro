@@ -4,4 +4,4 @@
 
 **Скачать:** https://lifaada.github.io/zapret-pro/
 
-Программа основана на открытых проектах [zapret](https://github.com/bol-van/zapret) (bol-van) и [zapret-discord-youtube](https://github.com/Flowseal/zapret-discord-youtube) (Flowseal).
+
