@@ -12,14 +12,9 @@ const mobile = matchMedia('(max-width: 900px)').matches;
 // то же правило, что в CSS: на узких и вытянутых по высоте экранах сфера по центру над текстом
 const narrowMQ = matchMedia('(max-width: 900px), (max-aspect-ratio: 23/20)');
 
-let renderer;
-try {
-  renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: 'high-performance' });
-} catch (e) {
-  document.documentElement.classList.add('no-webgl');
-  throw e;
-}
-document.documentElement.classList.add('webgl');
+// Ошибка здесь отклоняет import() — страница оставит 2D-сферу.
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: 'high-performance' });
+canvas.addEventListener('webglcontextlost', e => { e.preventDefault(); window.zpSceneFail && window.zpSceneFail('видеокарта сбросила WebGL'); });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, mobile ? 1.5 : 1.75));
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.05;
@@ -256,7 +251,10 @@ function resize() {
   world.position.set(wide ? 3.05 : 0, wide ? 0.1 : 0.15, 0);
   world.scale.setScalar(wide ? 0.86 : Math.min(0.78, 0.5 * camera.aspect + 0.28));
 }
+new ResizeObserver(() => resize()).observe(canvas);
 addEventListener('resize', resize);
+document.addEventListener('fullscreenchange', resize);
+narrowMQ.addEventListener ? narrowMQ.addEventListener('change', resize) : narrowMQ.addListener(resize);
 resize();
 
 const mouse = { x: 0, y: 0, tx: 0, ty: 0 };
@@ -274,7 +272,9 @@ new IntersectionObserver(es => { visible = es[0].isIntersecting; }).observe(hero
 document.addEventListener('visibilitychange', () => { if (!document.hidden) clock.getDelta(); });
 
 const clock = new THREE.Clock();
+let firstFrame = true;
 function tick() {
+  if (window.zpStop3D) return;
   requestAnimationFrame(tick);
   if (!visible || document.hidden) return;
   const dt = Math.min(clock.getDelta(), 0.05);
@@ -319,6 +319,7 @@ function tick() {
   burst.lookAt(camera.position);
 
   composer.render();
+  if (firstFrame) { firstFrame = false; window.zpSceneReady && window.zpSceneReady(); }
 }
 let burstStart = -10;
 tick();

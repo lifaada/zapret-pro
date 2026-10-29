@@ -43,7 +43,7 @@
     --body: Manrope, "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif;
   }
   * { box-sizing: border-box; }
-  html { scroll-behavior: smooth; background: var(--bg); }
+  html { scroll-behavior: smooth; background: var(--bg); overflow-x: clip; }
   body { margin: 0; color: var(--text); font: 16px/1.65 var(--body); -webkit-font-smoothing: antialiased; overflow-x: hidden; background: var(--bg); }
   /* зерно поверх всего — убирает «пластиковость» градиентов */
   body::after { content: ""; position: fixed; inset: 0; z-index: 100; pointer-events: none; opacity: .07; mix-blend-mode: overlay;
@@ -99,15 +99,14 @@
             radial-gradient(800px 500px at 90% 20%, rgba(34,227,238,.12), transparent 60%),
             radial-gradient(900px 600px at 10% 90%, rgba(59,130,246,.12), transparent 60%); }
   .hero::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 180px; background: linear-gradient(transparent, var(--bg)); pointer-events: none; }
-  #scene { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  #scene, #scene2d { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  #scene { opacity: 0; transition: opacity 1.2s ease; }
+  #scene2d { transition: opacity 1.2s ease; }
+  html.webgl #scene { opacity: 1; }
+  html.webgl #scene2d { opacity: 0; }
   .hero-grid-bg { position: absolute; inset: 0; pointer-events: none;
     background-image: linear-gradient(rgba(160,140,255,.06) 1px, transparent 1px), linear-gradient(90deg, rgba(160,140,255,.06) 1px, transparent 1px);
     background-size: 64px 64px; mask-image: radial-gradient(ellipse 70% 60% at 70% 50%, #000, transparent 75%); -webkit-mask-image: radial-gradient(ellipse 70% 60% at 70% 50%, #000, transparent 75%); }
-  /* запасной вариант без WebGL */
-  .fallback { position: absolute; right: 8%; top: 50%; width: min(46vw, 560px); aspect-ratio: 1; transform: translateY(-50%); border-radius: 50%; display: none;
-    background: radial-gradient(circle at 40% 35%, rgba(34,227,238,.5), rgba(139,92,246,.35) 45%, rgba(59,130,246,.1) 70%, transparent 72%);
-    box-shadow: 0 0 120px rgba(139,92,246,.45), inset 0 0 80px rgba(34,227,238,.35); }
-  html:not(.webgl) .fallback { display: block; }
 
   .hero-content { position: relative; z-index: 2; padding: 130px 0 190px; max-width: 780px; }
   .badge { display: inline-flex; gap: 10px; align-items: center; padding: 8px 16px 8px 12px; border-radius: 99px; font-size: 13px; font-weight: 600;
@@ -295,7 +294,7 @@
   /* узкие и вытянутые по высоте экраны (телефоны, планшеты, узкие окна): сфера сверху, текст под ней */
   @media (max-width: 900px), (max-aspect-ratio: 23/20) {
     .hero { display: block; min-height: 0; }
-    #scene { height: 62vh; height: 62svh; -webkit-mask-image: linear-gradient(#000 70%, transparent); mask-image: linear-gradient(#000 70%, transparent); }
+    #scene, #scene2d { height: 62vh; height: 62svh; -webkit-mask-image: linear-gradient(#000 70%, transparent); mask-image: linear-gradient(#000 70%, transparent); }
     .hero-grid-bg { height: 62vh; }
     /* текст под сферой на затемнении, чтобы читался */
     .hero-content { padding: 52vh 0 34px; max-width: none; }
@@ -308,7 +307,6 @@
     .stat:nth-child(-n+2) { border-bottom: 1px solid var(--line); }
     .route-row { grid-template-columns: 1fr; gap: 12px; }
     .gallery { grid-template-columns: 1fr; }
-    .fallback { right: 50%; transform: translate(50%, -80%); width: 80vw; }
   }
   @media (max-width: 640px) {
     .wrap { padding: 0 18px; }
@@ -351,7 +349,7 @@
   <!-- ======== ПЕРВЫЙ ЭКРАН ======== -->
   <div class="hero">
     <div class="hero-grid-bg"></div>
-    <div class="fallback" aria-hidden="true"></div>
+    <canvas id="scene2d" aria-hidden="true"></canvas>
     <canvas id="scene" aria-label="Голографическая сфера: потоки данных обходят блокировку, замок открывается"></canvas>
     <div class="wrap" style="width:100%">
       <div class="hero-content">
@@ -610,6 +608,28 @@
 </footer>
 
 <script src="js/page.js"></script>
-<script type="module" src="js/scene.js"></script>
+<script src="js/sphere2d.js"></script>
+<script>
+// Сначала мгновенно рисуется 2D-сфера; 3D (WebGL) грузится следом и плавно её заменяет.
+// Нет WebGL, старый браузер, ошибка или 3D не успела за 8 секунд — остаётся 2D.
+(function () {
+  zpStart2D();
+  var gl = false;
+  try { var c = document.createElement('canvas'); gl = !!(c.getContext('webgl2') || c.getContext('webgl')); } catch (e) {}
+  var importMap = window.HTMLScriptElement && HTMLScriptElement.supports && HTMLScriptElement.supports('importmap');
+  if (/[?&]no3d/.test(location.search)) gl = false; // проверка запасного варианта
+  if (!gl || !importMap) { console.info('3D недоступна в этом браузере — показана 2D-сфера'); return; }
+  var done = false;
+  window.zpSceneFail = function (e) {
+    if (done) return; done = true;
+    console.warn('3D не запустилась — остаётся 2D-сфера:', e);
+    window.zpStop3D = true;
+    document.documentElement.classList.remove('webgl');
+  };
+  window.zpSceneReady = function () { if (done) return; done = true; document.documentElement.classList.add('webgl'); window.zp2dStop = true; };
+  setTimeout(function () { if (!done) window.zpSceneFail('3D грузится слишком долго'); }, 8000);
+  import('./js/scene.js').catch(window.zpSceneFail);
+})();
+</script>
 </body>
 </html>
