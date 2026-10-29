@@ -292,7 +292,8 @@
     .demo-grid, .faq-grid { grid-template-columns: 1fr; gap: 40px; }
     .bento .card, .bento .card.w3, .bento .card.w4 { grid-column: span 3; }
   }
-  @media (max-width: 900px) {
+  /* узкие и вытянутые по высоте экраны (телефоны, планшеты, узкие окна): сфера сверху, текст под ней */
+  @media (max-width: 900px), (max-aspect-ratio: 23/20) {
     .hero { display: block; min-height: 0; }
     #scene { height: 62vh; height: 62svh; -webkit-mask-image: linear-gradient(#000 70%, transparent); mask-image: linear-gradient(#000 70%, transparent); }
     .hero-grid-bg { height: 62vh; }

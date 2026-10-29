@@ -9,6 +9,8 @@ const canvas = document.getElementById('scene');
 const hero = document.querySelector('.hero');
 const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const mobile = matchMedia('(max-width: 900px)').matches;
+// то же правило, что в CSS: на узких и вытянутых по высоте экранах сфера по центру над текстом
+const narrowMQ = matchMedia('(max-width: 900px), (max-aspect-ratio: 23/20)');
 
 let renderer;
 try {
@@ -250,7 +252,7 @@ function resize() {
   camera.aspect = W / H;
   camera.updateProjectionMatrix();
   // на широком экране сфера справа от текста, на узком — по центру позади
-  const wide = W / H > 1.15;
+  const wide = !narrowMQ.matches;
   world.position.set(wide ? 3.05 : 0, wide ? 0.1 : 0.15, 0);
   world.scale.setScalar(wide ? 0.86 : Math.min(0.78, 0.5 * camera.aspect + 0.28));
 }
