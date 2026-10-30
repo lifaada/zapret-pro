@@ -69,6 +69,7 @@
     const steps = $$('.d-step', demo), rows = $$('.d-row', demo);
     const power = $('.d-power', demo), title = $('.d-title', demo), sub = $('.d-sub', demo), prog = $('.d-prog i', demo), statusTxt = $('.d-status', demo);
     const replay = $('#demo-replay');
+    const btn = $('.d-btn', demo), aTitle = $('.d-atitle', demo), aSub = $('.d-asub', demo), pill = $('.d-pilltxt', demo), strat = $('.d-strat', demo);
     let timers = [];
     const at = (ms, fn) => timers.push(setTimeout(fn, reduce ? 0 : ms));
     const setStep = (i, s, txt) => { const el = steps[i]; el.dataset.s = s; if (txt) el.querySelector('small').textContent = txt; };
@@ -78,13 +79,14 @@
       steps.forEach(s => { s.dataset.s = 'wait'; s.querySelector('small').textContent = ''; });
       rows.forEach(r => { r.dataset.s = 'wait'; r.querySelector('b').style.width = '0%'; r.querySelector('em').textContent = '—'; });
       power.dataset.s = 'off'; title.textContent = 'Обход выключен'; sub.textContent = 'Нажмите, чтобы настроить';
+      btn.textContent = 'Запустить проверку и настройку'; btn.classList.remove('press'); aTitle.textContent = 'Автоматическая настройка'; aSub.textContent = 'Одна кнопка — и всё готово'; pill.textContent = 'Выключен'; strat.textContent = '—';
       prog.style.width = '0%'; statusTxt.textContent = 'Готов к настройке';
       demo.classList.remove('done');
     }
     function play() {
       reset();
-      at(500, () => { power.dataset.s = 'press'; });
-      at(800, () => { power.dataset.s = 'busy'; title.textContent = 'Идёт настройка…'; sub.textContent = 'Можно свернуть окно'; setStep(0, 'run'); statusTxt.textContent = 'Проверяю систему'; prog.style.width = '8%'; });
+      at(500, () => { power.dataset.s = 'press'; btn.classList.add('press'); });
+      at(800, () => { power.dataset.s = 'busy'; btn.classList.remove('press'); btn.textContent = 'Остановить'; aTitle.textContent = 'Идёт настройка…'; aSub.textContent = 'Можно свернуть окно — программа всё сделает сама'; title.textContent = 'Настраивается…'; sub.textContent = 'Подождите 1–3 минуты'; pill.textContent = 'Настройка'; setStep(0, 'run'); statusTxt.textContent = 'Проверяю систему'; prog.style.width = '8%'; });
       at(1900, () => { setStep(0, 'ok', 'TCP timestamps включены, конфликтов нет'); setStep(1, 'run'); prog.style.width = '16%'; statusTxt.textContent = 'Включаю шифрование DNS'; });
       at(3000, () => { setStep(1, 'ok', 'DNS через HTTPS включён'); setStep(2, 'run'); statusTxt.textContent = 'Проверяю стратегии'; });
       const scores = rows.map(r => +r.dataset.score);
@@ -103,7 +105,9 @@
       at(tEnd + 2300, () => {
         setStep(4, 'ok', '✔ Discord   ✔ YouTube   ✔ Видео   ✔ Голос');
         prog.style.width = '100%';
-        power.dataset.s = 'on'; title.textContent = 'Обход работает'; sub.textContent = 'Служба Windows · стратегия выбрана';
+        power.dataset.s = 'on'; title.textContent = 'Обход работает'; sub.textContent = 'Служба Windows · включается вместе с ПК';
+        btn.textContent = 'Проверить заново'; aTitle.textContent = 'Готово'; aSub.textContent = 'Обход включён и стоит в автозапуске'; pill.textContent = 'Работает';
+        strat.textContent = 'general (' + rows[scores.indexOf(Math.max(...scores))].querySelector('span').textContent + ')';
         statusTxt.textContent = 'Готово! Больше ничего делать не нужно';
         demo.classList.add('done');
         window.dispatchEvent(new Event('zp-unlock'));

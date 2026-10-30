@@ -7,7 +7,7 @@
 <meta name="description" content="Бесплатная программа для Windows: возвращает доступ к Discord и YouTube. Сама подбирает обход под провайдера, включается вместе с Windows и обновляется сама. Трафик идёт напрямую — это не VPN.">
 <meta property="og:title" content="Zapret Pro — Discord и YouTube снова работают">
 <meta property="og:description" content="Одна кнопка — и всё настроено. Бесплатно, Windows 7–11.">
-<meta property="og:image" content="img/app-home.png">
+<meta property="og:image" content="img/app-home.png?v=2">
 <meta name="theme-color" content="#06050d">
 <link rel="icon" href="img/icon.png">
 <link rel="preload" href="fonts/unbounded-cyrillic-700-normal.woff2" as="font" type="font/woff2" crossorigin>
@@ -186,53 +186,95 @@
   .demo-points li b { color: var(--text); font-weight: 600; }
   .demo-points li::before { content: ""; flex: none; width: 10px; height: 10px; margin-top: 8px; border-radius: 3px; transform: rotate(45deg);
                             background: linear-gradient(135deg, var(--cyan), var(--violet)); box-shadow: 0 0 12px rgba(34,227,238,.6); }
-  #demo { padding: 0; overflow: hidden; border-radius: 22px; transition: box-shadow .8s; }
-  #demo.done { box-shadow: inset 0 1px 0 rgba(255,255,255,.07), 0 30px 90px rgba(0,0,0,.4), 0 0 80px rgba(45,212,191,.18); }
-  .d-titlebar { height: 38px; display: flex; align-items: center; gap: 8px; padding: 0 16px; border-bottom: 1px solid var(--line); background: rgba(8,7,20,.6); font-size: 12px; color: var(--dim); }
-  .d-titlebar i { width: 11px; height: 11px; border-radius: 50%; background: #2b2850; }
-  .d-titlebar span { margin-left: 10px; }
-  .d-body { display: grid; grid-template-columns: 160px 1fr; min-height: 470px; }
-  .d-side { border-right: 1px solid var(--line); padding: 16px 10px; background: rgba(8,7,20,.35); }
-  .d-side .lg { display: flex; align-items: center; gap: 9px; font: 700 12px var(--display); margin: 2px 6px 18px; }
-  .d-side .lg i { width: 22px; height: 22px; border-radius: 7px; background: linear-gradient(135deg, var(--violet), var(--cyan)); }
-  .d-side p { margin: 2px 0; padding: 8px 10px; border-radius: 9px; font-size: 12.5px; color: var(--dim); }
-  .d-side p.on { background: rgba(139,92,246,.16); color: var(--text); box-shadow: inset 2px 0 0 var(--cyan); }
-  .d-main { padding: 20px 22px; }
-  .d-head { display: flex; align-items: center; gap: 18px; padding: 16px; border-radius: 16px; background: rgba(255,255,255,.03); border: 1px solid var(--line); }
-  .d-power { width: 62px; height: 62px; flex: none; border-radius: 50%; display: grid; place-items: center; border: 2px solid #34305a; background: #12102a;
-             transition: all .45s cubic-bezier(.2,.8,.2,1); }
-  .d-power svg { width: 26px; height: 26px; stroke: #77739e; transition: stroke .4s; }
-  .d-power[data-s="press"] { transform: scale(.88); }
-  .d-power[data-s="busy"] { border-color: #fbbf24; box-shadow: 0 0 26px rgba(251,191,36,.35); animation: pulse 1.2s infinite; }
+  /* окно-демонстрация: копия нового интерфейса программы */
+  #demo { padding: 0; overflow: hidden; border-radius: 18px; background: #07060f; border: 1px solid rgba(34,227,238,.28);
+          box-shadow: 0 30px 90px rgba(0,0,0,.45), 0 0 60px rgba(139,92,246,.18); transition: box-shadow .8s; position: relative; }
+  #demo::before { content: ""; position: absolute; inset: 0; pointer-events: none;
+                  background: radial-gradient(520px 340px at 92% 0%, rgba(139,92,246,.22), transparent 70%),
+                              radial-gradient(420px 300px at 0% 100%, rgba(34,227,238,.12), transparent 70%); }
+  #demo.done { box-shadow: 0 30px 90px rgba(0,0,0,.45), 0 0 80px rgba(45,212,191,.25); }
+  .d-titlebar { position: relative; height: 32px; display: flex; align-items: center; justify-content: space-between; padding-left: 14px;
+                font-size: 11.5px; color: var(--dim); background: rgba(10,9,24,.85); border-bottom: 1px solid var(--line); }
+  .d-titlebar .wb { display: flex; height: 100%; }
+  .d-titlebar .wb i { width: 40px; display: grid; place-items: center; font-style: normal; font-size: 12px; color: var(--dim); }
+  .d-body { position: relative; display: grid; grid-template-columns: 172px 1fr; }
+  .d-side { display: flex; flex-direction: column; border-right: 1px solid var(--line); padding: 16px 10px 12px; background: rgba(10,9,24,.7); }
+  .d-side .lg { display: flex; align-items: center; gap: 9px; margin: 0 4px 18px; }
+  .d-side .lg i { width: 28px; height: 28px; flex: none; border-radius: 8px; display: grid; place-items: center; font: 700 13px var(--display); font-style: normal; color: #fff;
+                  background: linear-gradient(135deg, var(--cyan), var(--violet)); box-shadow: 0 0 16px rgba(34,227,238,.45); }
+  .d-side .lg b { display: block; font: 700 12px var(--display); color: var(--text); }
+  .d-side .lg small { display: block; font-size: 10px; color: var(--muted); }
+  .d-nav { display: flex; align-items: center; gap: 10px; margin: 1px 0; padding: 7px 9px; border-radius: 9px; font-size: 12px; color: var(--muted); position: relative; }
+  .d-nav svg { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  .d-nav.on { color: var(--text); background: linear-gradient(90deg, rgba(34,227,238,.18), rgba(139,92,246,.06)); }
+  .d-nav.on::before { content: ""; position: absolute; left: -10px; top: 8px; bottom: 8px; width: 3px; border-radius: 2px;
+                      background: linear-gradient(var(--cyan), #c084fc); box-shadow: 0 0 10px var(--cyan); }
+  .d-pill { margin-top: auto; display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 9px; font-size: 11.5px;
+            background: rgba(16,14,33,.8); border: 1px solid var(--line); }
+  .d-pill i { width: 7px; height: 7px; border-radius: 50%; background: #6e6a8f; transition: all .4s; }
+  #demo.done .d-pill i { background: var(--mint); box-shadow: 0 0 8px var(--mint); }
+  .d-main { padding: 18px 20px 20px; min-width: 0; }
+  .d-h1 { font: 700 19px var(--display); margin: 0; }
+  .d-h1sub { font-size: 11.5px; color: var(--muted); margin: 2px 0 12px; }
+  .d-card { border-radius: 14px; border: 1px solid var(--line); background: rgba(16,14,33,.78); padding: 14px 16px; }
+  .d-auto { border-color: transparent; background: linear-gradient(135deg, rgba(22,32,66,.9), rgba(22,15,51,.85) 55%, rgba(16,14,33,.85)) padding-box,
+                    linear-gradient(135deg, rgba(34,227,238,.55), rgba(139,92,246,.2), rgba(192,132,252,.55)) border-box; }
+  .d-top { display: flex; align-items: center; gap: 14px; }
+  .d-top > div { flex: 1; min-width: 0; }
+  .d-atitle { font: 700 14.5px var(--display); }
+  .d-asub { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+  .d-btn { flex: none; padding: 9px 14px; border-radius: 10px; font: 700 11.5px var(--body); color: #06050d;
+           background: linear-gradient(90deg, var(--cyan), #c084fc); box-shadow: 0 0 18px rgba(34,227,238,.35); transition: transform .2s; }
+  .d-btn.press { transform: scale(.94); }
+  .d-prog { height: 5px; margin: 12px 0 6px; border-radius: 3px; background: rgba(160,140,255,.12); overflow: hidden; }
+  .d-prog i { display: block; height: 100%; width: 0; border-radius: 3px; background: linear-gradient(90deg, var(--cyan), #c084fc); transition: width .6s ease; box-shadow: 0 0 12px var(--cyan); }
+  .d-status { font-size: 11.5px; color: var(--muted); min-height: 17px; }
+  .d-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 8px; }
+  .d-step { display: grid; grid-template-columns: 18px 1fr; gap: 6px; padding: 4px 0; font-size: 12px; color: var(--dim); font-weight: 600; }
+  .d-step::before { content: ""; width: 10px; height: 10px; margin-top: 3px; border-radius: 50%; border: 1.5px solid #3f3772; transition: all .3s; }
+  .d-step small { grid-column: 2; display: block; font-size: 10.5px; font-weight: 400; color: var(--dim); line-height: 1.35; }
+  .d-step[data-s="run"] { color: var(--text); }
+  .d-step[data-s="run"]::before { border-color: var(--cyan); background: var(--cyan); box-shadow: 0 0 8px var(--cyan); animation: pulse2 1s infinite; }
+  @keyframes pulse2 { 50% { opacity: .35; } }
+  .d-step[data-s="ok"] { color: var(--text); }
+  .d-step[data-s="ok"]::before { border: 0; width: 12px; height: 12px; margin-top: 2px; background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%232dd4bf' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'><path d='M4 12l5 5L20 6'/></svg>") center/12px no-repeat; }
+  .d-step[data-s="ok"] small { color: var(--muted); }
+  .d-table .t-h { display: flex; justify-content: space-between; font-size: 9.5px; font-weight: 700; letter-spacing: 1.4px; color: var(--cyan); margin: 4px 0 4px; }
+  .d-row { display: grid; grid-template-columns: 1fr 56px 32px; gap: 8px; align-items: center; padding: 4px 6px; margin: 0 -6px; border-radius: 7px; font-size: 11.5px; color: var(--dim); transition: background .3s; }
+  .d-row .bar { height: 4px; border-radius: 2px; background: rgba(160,140,255,.12); overflow: hidden; }
+  .d-row b { display: block; height: 100%; width: 0; border-radius: 2px; transition: width .5s ease; background: linear-gradient(90deg, var(--cyan), #c084fc); }
+  .d-row em { font-style: normal; text-align: right; }
+  .d-row[data-s="run"] { background: rgba(34,227,238,.08); color: var(--text); }
+  .d-row[data-s="mid"] { color: var(--muted); }
+  .d-row[data-s="bad"] b { background: var(--red); }
+  .d-row[data-s="best"] { color: var(--text); background: rgba(45,212,191,.1); } .d-row[data-s="best"] b { box-shadow: 0 0 10px var(--cyan); }
+  .d-pow { display: flex; align-items: center; gap: 18px; margin-top: 10px; }
+  .d-power { position: relative; width: 66px; height: 66px; flex: none; border-radius: 50%; display: grid; place-items: center; background: #0e0c1d;
+             transition: all .4s; }
+  .d-power::before { content: ""; position: absolute; inset: 0; border-radius: 50%; padding: 2.5px;
+                     background: linear-gradient(135deg, rgba(34,227,238,.45), rgba(139,92,246,.2), rgba(192,132,252,.45));
+                     -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; transition: all .4s; }
+  .d-power::after { content: ""; position: absolute; inset: 9px; border-radius: 50%; background: #141128; transition: background .4s; }
+  .d-power svg { position: relative; z-index: 1; width: 24px; height: 24px; stroke: #8c87b0; transition: stroke .4s; }
+  .d-power[data-s="press"] { transform: scale(.9); }
+  .d-power[data-s="busy"] { box-shadow: 0 0 22px rgba(251,191,36,.3); animation: pulse 1.2s infinite; }
+  .d-power[data-s="busy"]::before { background: #fbbf24; }
   .d-power[data-s="busy"] svg { stroke: #fbbf24; }
-  .d-power[data-s="on"] { border-color: var(--mint); background: #0d2622; box-shadow: 0 0 34px rgba(45,212,191,.55), inset 0 0 18px rgba(45,212,191,.25); }
+  .d-power[data-s="on"] { box-shadow: 0 0 30px rgba(45,212,191,.5); }
+  .d-power[data-s="on"]::before { background: var(--mint); }
+  .d-power[data-s="on"]::after { background: #0e2a2b; }
   .d-power[data-s="on"] svg { stroke: var(--mint); }
   @keyframes pulse { 50% { box-shadow: 0 0 6px rgba(251,191,36,.2); } }
-  .d-title { font: 700 17px var(--display); }
-  .d-sub { font-size: 12.5px; color: var(--muted); }
-  .d-prog { height: 5px; margin: 16px 0 6px; border-radius: 3px; background: rgba(255,255,255,.06); overflow: hidden; }
-  .d-prog i { display: block; height: 100%; width: 0; border-radius: 3px; background: linear-gradient(90deg, var(--violet), var(--cyan), var(--mint)); transition: width .6s ease; box-shadow: 0 0 12px var(--cyan); }
-  .d-status { font-size: 12px; color: var(--dim); min-height: 18px; }
-  .d-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 14px; }
-  .d-steps, .d-table { border-radius: 14px; background: rgba(255,255,255,.025); border: 1px solid var(--line); padding: 12px 14px; }
-  .d-step { display: grid; grid-template-columns: 20px 1fr; gap: 8px; padding: 6px 0; font-size: 13px; color: var(--dim); }
-  .d-step::before { content: ""; width: 14px; height: 14px; margin-top: 3px; border-radius: 50%; border: 1.5px solid #3b3766; transition: all .3s; }
-  .d-step small { grid-column: 2; display: block; font-size: 11.5px; color: var(--dim); line-height: 1.35; }
-  .d-step[data-s="run"] { color: var(--text); }
-  .d-step[data-s="run"]::before { border-color: var(--cyan); border-top-color: transparent; animation: rot .8s linear infinite; }
-  .d-step[data-s="ok"] { color: var(--text); }
-  .d-step[data-s="ok"]::before { border-color: var(--mint); background: var(--mint) url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2306050d' stroke-width='4' stroke-linecap='round' stroke-linejoin='round'><path d='M5 12l5 5L20 7'/></svg>") center/9px no-repeat; box-shadow: 0 0 10px rgba(45,212,191,.6); }
-  .d-step[data-s="ok"] small { color: var(--muted); }
   @keyframes rot { to { transform: rotate(360deg); } }
-  .d-table .t-h { display: flex; justify-content: space-between; font-size: 10.5px; letter-spacing: 1.5px; color: var(--dim); margin-bottom: 6px; }
-  .d-row { display: grid; grid-template-columns: 1fr 64px 36px; gap: 8px; align-items: center; padding: 5px 6px; margin: 0 -6px; border-radius: 8px; font-size: 12px; color: var(--dim); transition: background .3s; }
-  .d-row .bar { height: 5px; border-radius: 3px; background: rgba(255,255,255,.06); overflow: hidden; }
-  .d-row b { display: block; height: 100%; width: 0; border-radius: 3px; transition: width .5s ease; }
-  .d-row em { font-style: normal; text-align: right; }
-  .d-row[data-s="run"] { background: rgba(34,227,238,.07); color: var(--text); }
-  .d-row[data-s="mid"] { color: var(--muted); } .d-row[data-s="mid"] b { background: #fbbf24; }
-  .d-row[data-s="bad"] b { background: var(--red); }
-  .d-row[data-s="best"] { color: var(--text); background: rgba(45,212,191,.09); } .d-row[data-s="best"] b { background: var(--mint); box-shadow: 0 0 10px var(--mint); }
+  .d-pow > div:not(.d-power) { flex: 1; min-width: 0; }
+  .d-title { display: flex; align-items: center; gap: 8px; font: 700 15px var(--display); }
+  .d-title::before { content: ""; width: 8px; height: 8px; flex: none; border-radius: 50%; background: #6e6a8f; transition: all .4s; }
+  #demo.done .d-title::before { background: var(--mint); box-shadow: 0 0 8px var(--mint); }
+  .d-sub { font-size: 11.5px; color: var(--muted); margin: 2px 0 0 16px; }
+  .d-lbl { font-size: 9.5px; font-weight: 700; letter-spacing: 1.4px; color: var(--cyan); margin: 10px 0 5px; }
+  .d-combo { display: flex; justify-content: space-between; align-items: center; max-width: 230px; padding: 6px 10px; border-radius: 9px; font-size: 11.5px;
+             background: #0b0a19; border: 1px solid var(--line); }
+  .d-combo::after { content: ""; width: 6px; height: 6px; border: solid var(--muted); border-width: 0 1.5px 1.5px 0; transform: rotate(45deg) translate(-2px, -2px); }
   .demo-foot { display: flex; justify-content: space-between; align-items: center; margin-top: 14px; font-size: 13px; color: var(--dim); }
   .demo-foot button { background: none; border: 1px solid var(--line-2); color: var(--muted); border-radius: 10px; padding: 7px 14px; font: 600 13px var(--body); cursor: pointer; }
   .demo-foot button:hover { color: var(--text); border-color: var(--cyan); }
@@ -345,6 +387,7 @@
     .bento .card, .bento .card.w3, .bento .card.w4 { grid-column: span 6; }
     .d-body { grid-template-columns: 1fr; } .d-side { display: none; }
     .d-cols { grid-template-columns: 1fr; }
+    .d-top { flex-direction: column; align-items: flex-start; }
     .route { padding: 6px 16px; }
     .node { padding: 8px 9px; font-size: 12px; }
     .stat { padding: 12px 14px; } .stat b { font-size: 22px; }
@@ -450,35 +493,48 @@
 
       <div class="reveal d2">
         <div id="demo" class="glass">
-          <div class="d-titlebar"><i></i><i></i><i></i><span>Zapret Pro</span></div>
+          <div class="d-titlebar"><span>Zapret Pro</span><span class="wb"><i>—</i><i>▢</i><i>✕</i></span></div>
           <div class="d-body">
             <div class="d-side">
-              <div class="lg"><i></i>Zapret Pro</div>
-              <p class="on">Главная</p><p>Подбор стратегии</p><p>Автозапуск</p><p>Списки сайтов</p><p>Настройки</p><p>Диагностика</p>
+              <div class="lg"><i>Z</i><span><b>Zapret Pro</b><small>версия <span data-ver>1.2.2</span></small></span></div>
+              <div class="d-nav on"><svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>Главная</div><div class="d-nav "><svg viewBox="0 0 24 24"><path d="M3 12h4l3-7 4 14 3-7h4"/></svg>Подбор стратегии</div><div class="d-nav "><svg viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/></svg>Автозапуск</div><div class="d-nav "><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h10M4 18h13"/></svg>Списки сайтов</div><div class="d-nav "><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9L7 7M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></svg>Настройки</div><div class="d-nav "><svg viewBox="0 0 24 24"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.5-2.5z"/></svg>Диагностика</div><div class="d-nav "><svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5"/></svg>Журнал</div>
+              <div class="d-pill"><i></i><span class="d-pilltxt">Выключен</span></div>
             </div>
             <div class="d-main">
-              <div class="d-head">
-                <div class="d-power" data-s="off"><svg viewBox="0 0 24 24" fill="none" stroke-width="2.4" stroke-linecap="round"><path d="M12 3v8"/><path d="M18.4 6.6a8 8 0 1 1-12.8 0"/></svg></div>
-                <div><div class="d-title">Обход выключен</div><div class="d-sub">Нажмите, чтобы настроить</div></div>
-              </div>
-              <div class="d-prog"><i></i></div>
-              <div class="d-status">Готов к настройке</div>
-              <div class="d-cols">
-                <div class="d-steps">
-                  <div class="d-step" data-s="wait">Подготовка системы<small></small></div>
-                  <div class="d-step" data-s="wait">Безопасный DNS<small></small></div>
-                  <div class="d-step" data-s="wait">Подбор стратегии<small></small></div>
-                  <div class="d-step" data-s="wait">Запуск и автозапуск<small></small></div>
-                  <div class="d-step" data-s="wait">Проверка доступа<small></small></div>
+              <h3 class="d-h1">Главная</h3>
+              <div class="d-h1sub">Обход блокировок Discord, YouTube и других сервисов</div>
+              <div class="d-card d-auto">
+                <div class="d-top">
+                  <div><div class="d-atitle">Автоматическая настройка</div><div class="d-asub">Одна кнопка — и всё готово</div></div>
+                  <span class="d-btn">Запустить проверку и настройку</span>
                 </div>
-                <div class="d-table">
-                  <div class="t-h"><span>СТРАТЕГИЯ</span><span>ОЦЕНКА</span></div>
-                  <div class="d-row" data-score="58"><span>general</span><div class="bar"><b></b></div><em>—</em></div>
-                  <div class="d-row" data-score="33"><span>ALT</span><div class="bar"><b></b></div><em>—</em></div>
-                  <div class="d-row" data-score="81"><span>ALT11</span><div class="bar"><b></b></div><em>—</em></div>
-                  <div class="d-row" data-score="47"><span>FAKE TLS AUTO</span><div class="bar"><b></b></div><em>—</em></div>
-                  <div class="d-row" data-score="100"><span>ZP HOSTFAKE</span><div class="bar"><b></b></div><em>—</em></div>
-                  <div class="d-row" data-score="92"><span>ZP MAXRU</span><div class="bar"><b></b></div><em>—</em></div>
+                <div class="d-prog"><i></i></div>
+                <div class="d-status">Готов к настройке</div>
+                <div class="d-cols">
+                  <div class="d-steps">
+                    <div class="d-step" data-s="wait">Подготовка системы<small></small></div>
+                    <div class="d-step" data-s="wait">Безопасный DNS<small></small></div>
+                    <div class="d-step" data-s="wait">Подбор стратегии<small></small></div>
+                    <div class="d-step" data-s="wait">Запуск и автозапуск<small></small></div>
+                    <div class="d-step" data-s="wait">Проверка Discord и YouTube<small></small></div>
+                  </div>
+                  <div class="d-table">
+                    <div class="t-h"><span>СТРАТЕГИЯ</span><span>ОЦЕНКА</span></div>
+                    <div class="d-row" data-score="58"><span>general</span><div class="bar"><b></b></div><em>—</em></div>
+                    <div class="d-row" data-score="33"><span>ALT</span><div class="bar"><b></b></div><em>—</em></div>
+                    <div class="d-row" data-score="81"><span>ALT11</span><div class="bar"><b></b></div><em>—</em></div>
+                    <div class="d-row" data-score="47"><span>FAKE TLS AUTO</span><div class="bar"><b></b></div><em>—</em></div>
+                    <div class="d-row" data-score="100"><span>ZP HOSTFAKE</span><div class="bar"><b></b></div><em>—</em></div>
+                    <div class="d-row" data-score="92"><span>ZP MAXRU</span><div class="bar"><b></b></div><em>—</em></div>
+                  </div>
+                </div>
+              </div>
+              <div class="d-card d-pow">
+                <div class="d-power" data-s="off"><svg viewBox="0 0 24 24" fill="none" stroke-width="2.4" stroke-linecap="round"><path d="M12 3v8"/><path d="M18.4 6.6a8 8 0 1 1-12.8 0"/></svg></div>
+                <div>
+                  <div class="d-title">Обход выключен</div><div class="d-sub">Нажмите, чтобы настроить</div>
+                  <div class="d-lbl">СТРАТЕГИЯ</div>
+                  <div class="d-combo"><span class="d-strat">—</span></div>
                 </div>
               </div>
             </div>
@@ -578,16 +634,16 @@
       </div>
       <div class="gallery">
         <figure class="glass reveal">
-          <img src="img/app-test.png" alt="Подбор стратегии: таблица результатов" loading="lazy" width="1184" height="741">
+          <img src="img/app-test.png?v=2" alt="Подбор стратегии: таблица результатов" loading="lazy" width="1184" height="741">
           <figcaption>Подбор: каждая стратегия проверяется, лучшая отмечается звездой</figcaption>
         </figure>
         <div class="col">
           <figure class="glass reveal d1">
-            <img src="img/setup.png" alt="Окно установки Zapret Pro" loading="lazy" width="728" height="488">
+            <img src="img/setup.png?v=2" alt="Окно установки Zapret Pro" loading="lazy" width="728" height="488">
             <figcaption>Установка: папка, ярлыки, автонастройка</figcaption>
           </figure>
           <figure class="glass reveal d2">
-            <img src="img/app-diag.png" alt="Диагностика системы" loading="lazy" width="1184" height="741">
+            <img src="img/app-diag.png?v=2" alt="Диагностика системы" loading="lazy" width="1184" height="741">
             <figcaption>Диагностика: проблемы исправляются одной кнопкой</figcaption>
           </figure>
         </div>
@@ -654,7 +710,7 @@
 </footer>
 
 <script>var ZP_ASSETS = "11";</script>
-<script src="js/page.js?v=5"></script>
+<script src="js/page.js?v=6"></script>
 <script src="js/sphere2d.js?v=6"></script>
 <script>
 // Сначала мгновенно рисуется 2D-сфера; 3D (WebGL) грузится следом и плавно её заменяет.
