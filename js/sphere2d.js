@@ -1,5 +1,6 @@
-// Запасная сфера без WebGL (обычный canvas 2D): точки, меридианы, дуги данных и замок в центре.
-// Включается, если браузер не дал видеокарту (выключено аппаратное ускорение) или 3D-скрипт не загрузился.
+// Частицы без WebGL (обычный canvas 2D): та же история, что и в 3D, только легче —
+// сфера → замок → разлёт с пролётом камеры → надпись ZAPRET PRO → значки видео и голоса → пыль → сфера.
+// Рисуется сразу при загрузке; если 3D запустится, этот холст плавно гаснет и останавливается.
 window.zpStart2D = function () {
   if (window.zp2dStarted) return;
   window.zp2dStarted = true;
@@ -9,147 +10,270 @@ window.zpStart2D = function () {
   const ctx = canvas.getContext('2d');
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const narrowMQ = matchMedia('(max-width: 900px), (max-aspect-ratio: 23/20)');
-  let W = 0, H = 0, R = 0, CX = 0, CY = 0, dpr = 1, visible = true;
+  const finePointer = matchMedia('(pointer: fine)').matches;
+  const weak = matchMedia('(max-width: 900px)').matches || (navigator.hardwareConcurrency || 8) <= 4;
+  const N = weak ? 2200 : 4200;
+  let W = 0, H = 0, dpr = 1;
 
-  const N = 700, pts = [];
-  for (let i = 0; i < N; i++) {
-    const y = 1 - (i / (N - 1)) * 2, r = Math.sqrt(1 - y * y), t = i * 2.399963;
-    pts.push([Math.cos(t) * r, y, Math.sin(t) * r, Math.random()]);
+  // ---------- Формы: каждая — N точек (те же единицы, что и в 3D) ----------
+  function sampleCanvas(w, h, scale, depth, draw) {
+    const c = document.createElement('canvas');
+    c.width = w; c.height = h;
+    const g = c.getContext('2d');
+    draw(g, w, h);
+    const d = g.getImageData(0, 0, w, h).data, px = [];
+    for (let y = 0; y < h; y += 3) for (let x = 0; x < w; x += 3) if (d[(y * w + x) * 4 + 3] > 120) px.push(x, y);
+    const out = new Float32Array(N * 3), n = px.length / 2;
+    for (let i = 0; i < N; i++) {
+      const k = (Math.random() * n | 0) * 2;
+      out[i * 3] = (px[k] - w / 2 + Math.random() * 3) * scale;
+      out[i * 3 + 1] = -(px[k + 1] - h / 2 + Math.random() * 3) * scale;
+      out[i * 3 + 2] = (Math.random() - 0.5) * depth;
+    }
+    return out;
   }
-  const rnd = () => { const u = Math.random() * 2 - 1, t = Math.random() * Math.PI * 2, s = Math.sqrt(1 - u * u); return [Math.cos(t) * s, u, Math.sin(t) * s]; };
-  const slerp = (a, b, t) => {
-    const d = Math.min(1, Math.max(-1, a[0] * b[0] + a[1] * b[1] + a[2] * b[2])), w = Math.acos(d);
-    if (w < 1e-4) return a;
-    const s = Math.sin(w), k1 = Math.sin((1 - t) * w) / s, k2 = Math.sin(t * w) / s;
-    return [a[0] * k1 + b[0] * k2, a[1] * k1 + b[1] * k2, a[2] * k1 + b[2] * k2];
-  };
-  const newArc = () => ({ a: rnd(), b: rnd(), lift: 1.15 + Math.random() * .3, t: Math.random(), speed: .003 + Math.random() * .004, c: Math.random() < .65 ? '34,227,238' : '192,132,252' });
-  const arcs = Array.from({ length: 18 }, newArc);
-  const stars = Array.from({ length: 160 }, () => [Math.random(), Math.random(), Math.random() * 1.4 + .3, Math.random()]);
+  function fill(fn) {
+    const out = new Float32Array(N * 3);
+    for (let i = 0; i < N; i++) { const p = fn(i); out[i * 3] = p[0]; out[i * 3 + 1] = p[1]; out[i * 3 + 2] = p[2]; }
+    return out;
+  }
+  const rdir = () => { const u = Math.random() * 2 - 1, t = Math.random() * Math.PI * 2, s = Math.sqrt(1 - u * u); return [Math.cos(t) * s, u, Math.sin(t) * s]; };
 
-  let rotY = 0, mx = 0, my = 0, tmx = 0, tmy = 0;
-  addEventListener('pointermove', e => { tmx = (e.clientX / innerWidth - .5) * .7; tmy = (e.clientY / innerHeight - .5) * .4; });
+  const SPHERE = fill(i => {
+    if (i % 7 === 0) { const d = rdir(), r = Math.cbrt(Math.random()) * 1.9; return [d[0] * r, d[1] * r, d[2] * r]; }
+    const y = 1 - (i / (N - 1)) * 2, r = Math.sqrt(1 - y * y), t = i * 2.399963;
+    return [Math.cos(t) * r * 2.1, y * 2.1, Math.sin(t) * r * 2.1];
+  });
+  const LOCK = sampleCanvas(600, 600, 5 / 600, 0.7, g => {
+    g.fillStyle = '#fff'; g.strokeStyle = '#fff'; g.lineWidth = 62; g.lineCap = 'round';
+    g.beginPath(); g.moveTo(178, 300); g.lineTo(178, 220); g.arc(300, 220, 122, Math.PI, 0); g.lineTo(422, 300); g.stroke();
+    g.fillRect(130, 270, 340, 270);
+    g.globalCompositeOperation = 'destination-out';
+    g.beginPath(); g.arc(300, 375, 38, 0, Math.PI * 2); g.fill();
+    g.fillRect(284, 375, 32, 90);
+  });
+  const SHATTER = fill(() => { const d = rdir(), r = 3 + Math.pow(Math.random(), 0.7) * 14; return [d[0] * r, d[1] * r * 0.8, d[2] * r]; });
+  const DUST = fill(() => [(Math.random() - 0.5) * 34, (Math.random() - 0.5) * 20, -16 + Math.random() * 18]);
+  let TEXT = SPHERE, ICONS = SPHERE;
+  function buildTextShapes() {
+    TEXT = sampleCanvas(1500, 320, 9.2 / 1500, 0.35, (g, w, h) => {
+      g.fillStyle = '#fff'; g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.font = '700 200px Unbounded, "Segoe UI", sans-serif';
+      g.fillText('ZAPRET PRO', w / 2, h / 2 + 6);
+    });
+    ICONS = sampleCanvas(1400, 520, 8.4 / 1400, 0.5, g => {
+      g.fillStyle = '#fff'; g.strokeStyle = '#fff';
+      g.fillRect(130, 110, 560, 330);
+      g.globalCompositeOperation = 'destination-out';
+      g.beginPath(); g.moveTo(350, 185); g.lineTo(350, 365); g.lineTo(510, 275); g.closePath(); g.fill();
+      g.globalCompositeOperation = 'source-over';
+      g.beginPath(); g.arc(1025, 145, 75, Math.PI, 0); g.lineTo(1100, 245); g.arc(1025, 245, 75, 0, Math.PI); g.closePath(); g.fill();
+      g.lineWidth = 38; g.lineCap = 'round';
+      g.beginPath(); g.arc(1025, 240, 150, 0.15 * Math.PI, 0.85 * Math.PI); g.stroke();
+      g.beginPath(); g.moveTo(1025, 390); g.lineTo(1025, 455); g.stroke();
+      g.beginPath(); g.moveTo(945, 462); g.lineTo(1105, 462); g.stroke();
+    });
+  }
+  buildTextShapes();
+  if (document.fonts && document.fonts.load) document.fonts.load('700 200px Unbounded').then(buildTextShapes).catch(() => {});
+
+  const SHAPES = () => [SPHERE, LOCK, SHATTER, TEXT, ICONS, DUST, SPHERE];
+  const STAGE = [
+    { size: 1.9, bright: 1.0, spin: 1, wide: [3.0, 0.1, 1.0], narrow: [0, 1.9, 0.72] },
+    { size: 2.1, bright: 1.15, spin: 0, wide: [0, 0.55, 0.95], narrow: [0, 1.1, 0.7] },
+    { size: 1.7, bright: 0.85, spin: 1, wide: [0, 0, 1], narrow: [0, 0, 1] },
+    { size: 1.45, bright: 1.2, spin: 0, wide: [0, 0.6, 1], narrow: [0, 1.0, 0] },
+    { size: 1.55, bright: 1.15, spin: 0, wide: [0, 0.5, 1], narrow: [0, 1.0, 0] },
+    { size: 1.25, bright: 0.32, spin: 1, wide: [0, 0, 1], narrow: [0, 0, 1] },
+    { size: 1.8, bright: 0.7, spin: 1, wide: [0, 0.2, 0.9], narrow: [0, 0.6, 0.7] },
+  ];
+
+  // частицы сгруппированы по цвету — меньше переключений fillStyle
+  const COLORS = ['34,227,238', '127,244,255', '139,92,246', '192,132,252', '45,212,191'];
+  const rand = new Float32Array(N), group = [[], [], [], [], []];
+  for (let i = 0; i < N; i++) {
+    rand[i] = Math.random();
+    const r = Math.random();
+    group[r < 0.38 ? 0 : r < 0.55 ? 1 : r < 0.75 ? 2 : r < 0.9 ? 3 : 4].push(i);
+  }
+
+  // ---------- Прокрутка → этап ----------
+  let anchors = [];
+  function measureAnchors() {
+    anchors = [...document.querySelectorAll('[data-stage]')].map(el => {
+      const r = el.getBoundingClientRect();
+      return { v: +el.dataset.stage, y: r.top + scrollY + r.height / 2 };
+    }).sort((a, b) => a.y - b.y);
+  }
+  function stageFromScroll() {
+    if (!anchors.length) return 0;
+    const y = scrollY + innerHeight / 2;
+    if (y <= anchors[0].y) return anchors[0].v;
+    for (let i = 0; i < anchors.length - 1; i++) {
+      const a = anchors[i], b = anchors[i + 1];
+      if (y <= b.y) return a.v + (b.v - a.v) * (y - a.y) / Math.max(1, b.y - a.y);
+    }
+    return anchors[anchors.length - 1].v;
+  }
 
   function resize() {
-    const r = canvas.getBoundingClientRect();
     dpr = Math.min(2, window.devicePixelRatio || 1);
-    W = r.width; H = r.height;
-    canvas.width = Math.max(1, Math.round(W * dpr)); canvas.height = Math.max(1, Math.round(H * dpr));
+    W = innerWidth; H = innerHeight;
+    canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    const wide = !narrowMQ.matches;
-    R = wide ? Math.min(W * .17, H * .27) : Math.min(W * .32, H * .28);
-    CX = wide ? W * .72 : W / 2;
-    CY = wide ? H * .48 : H * .45;
+    measureAnchors();
   }
-  new ResizeObserver(resize).observe(canvas);
+  addEventListener('resize', resize);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(measureAnchors);
+  addEventListener('load', measureAnchors);
+  const anchorTimer = setInterval(measureAnchors, 2000);
   resize();
 
-  function project(p, lift) {
-    const k = lift || 1;
-    const cy = Math.cos(rotY + mx), sy = Math.sin(rotY + mx), cx = Math.cos(-.35 + my), sx = Math.sin(-.35 + my);
-    let x = p[0] * cy + p[2] * sy, z = -p[0] * sy + p[2] * cy;
-    let y = p[1] * cx - z * sx; z = p[1] * sx + z * cx;
-    const f = 3 / (3 - z * k);
-    return [CX + x * R * k * f, CY + y * R * k * f, z];
+  // ---------- Мышь: разбегание, вращение, клик — взрыв ----------
+  const mouse = { x: 0, y: 0, on: false };
+  let dragging = false, lastX = 0, lastY = 0, velX = 0, velY = 0, dragRotY = 0, dragRotX = 0, burst = 0;
+  let downAt = 0, downX = 0, downY = 0;
+  const interactive = el => el.closest && el.closest('a, button, summary, details, input, label, #demo, .glass, header');
+  addEventListener('pointermove', e => {
+    mouse.x = e.clientX; mouse.y = e.clientY; mouse.on = true;
+    if (dragging) {
+      velY = (e.clientX - lastX) * 0.006; velX = (e.clientY - lastY) * 0.004;
+      dragRotY += velY; dragRotX += velX; lastX = e.clientX; lastY = e.clientY;
+    }
+    if (trailPts) trailPts.push({ x: e.clientX, y: e.clientY, t: performance.now() });
+  }, { passive: true });
+  document.addEventListener('pointerleave', () => { mouse.on = false; });
+  addEventListener('pointerdown', e => {
+    if (e.button !== 0 || interactive(e.target)) return;
+    dragging = true; lastX = e.clientX; lastY = e.clientY; downAt = performance.now(); downX = e.clientX; downY = e.clientY;
+  });
+  addEventListener('pointerup', e => {
+    if (!dragging) return;
+    dragging = false;
+    if (performance.now() - downAt < 300 && Math.hypot(e.clientX - downX, e.clientY - downY) < 6) burst += 0.6;
+  });
+  addEventListener('zp-unlock', () => { burst += 0.25; });
+
+  // ---------- Неоновый след за курсором ----------
+  const trail = document.getElementById('trail');
+  const tctx = trail && finePointer && !reduce ? trail.getContext('2d') : null;
+  const trailPts = tctx ? [] : null;
+  function sizeTrail() {
+    if (!tctx) return;
+    trail.width = innerWidth * dpr; trail.height = innerHeight * dpr;
+    tctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
-  function roundRect(x, y, w, h, r) {
-    ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
-    ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+  addEventListener('resize', sizeTrail);
+  sizeTrail();
+  function drawTrail(now) {
+    if (!tctx) return;
+    while (trailPts.length && now - trailPts[0].t > 380) trailPts.shift();
+    tctx.clearRect(0, 0, innerWidth, innerHeight);
+    if (trailPts.length < 2) return;
+    tctx.lineCap = 'round'; tctx.lineJoin = 'round';
+    for (let pass = 0; pass < 2; pass++) {
+      for (let i = 1; i < trailPts.length; i++) {
+        const a = trailPts[i - 1], b = trailPts[i], k = 1 - (now - b.t) / 380;
+        tctx.strokeStyle = pass ? `rgba(220,252,255,${k * 0.9})` : `rgba(${i % 2 ? '34,227,238' : '139,92,246'},${k * 0.35})`;
+        tctx.lineWidth = pass ? 1.6 * k + 0.4 : 10 * k + 2;
+        tctx.beginPath(); tctx.moveTo(a.x, a.y); tctx.lineTo(b.x, b.y); tctx.stroke();
+      }
+    }
   }
-  function lock(t) {
-    const s = R * .32, open = (Math.sin(t * .9) > .2 ? 1 : 0);
-    const k = window.zpLockK = (window.zpLockK || 0) + ((open ? 1 : 0) - (window.zpLockK || 0)) * .08;
-    ctx.save();
-    ctx.translate(CX, CY + Math.sin(t * 1.3) * R * .02);
-    ctx.shadowColor = 'rgba(34,227,238,.9)'; ctx.shadowBlur = 24;
-    // дужка
-    ctx.save();
-    ctx.translate(-s * .38, -s * .2 - k * s * .22);
-    ctx.rotate(-k * .55);
-    ctx.strokeStyle = '#bff8ff'; ctx.lineWidth = s * .13; ctx.lineCap = 'round';
-    ctx.beginPath(); ctx.moveTo(0, s * .25); ctx.lineTo(0, -s * .15); ctx.arc(s * .38, -s * .15, s * .38, Math.PI, 0); ctx.lineTo(s * .76, s * .25); ctx.stroke();
-    ctx.restore();
-    // корпус
-    const g = ctx.createLinearGradient(0, -s * .2, 0, s * .6);
-    g.addColorStop(0, 'rgba(59,130,246,.55)'); g.addColorStop(1, 'rgba(76,29,149,.75)');
-    ctx.fillStyle = g; roundRect(-s * .62, -s * .2, s * 1.24, s * .86, s * .16); ctx.fill();
-    ctx.strokeStyle = 'rgba(127,244,255,.95)'; ctx.lineWidth = 2; ctx.stroke();
-    ctx.fillStyle = k > .5 ? '#7cf5d9' : '#bff8ff';
-    ctx.beginPath(); ctx.arc(0, s * .14, s * .1, 0, Math.PI * 2); ctx.fill();
-    ctx.fillRect(-s * .04, s * .14, s * .08, s * .2);
-    ctx.restore();
-  }
+
+  // ---------- Анимация ----------
+  const lerp = (a, b, t) => a + (b - a) * t;
+  const ease = t => t * t * (3 - 2 * t);
+  const bump = (x, c, w) => Math.max(0, 1 - Math.abs(x - c) / w);
+  const TAN = Math.tan(21 * Math.PI / 180); // поле зрения как у 3D-камеры (42°)
+  let stage = stageFromScroll(), spin = 0, mouseF = 0, last = performance.now(), t = 0;
 
   function frame(now) {
-    if (window.zp2dStop) { setTimeout(() => ctx.clearRect(0, 0, W, H), 1300); return; } // 3D готова — 2D больше не нужна
+    if (window.zp2dStop) { // 3D готова — гасим холст (CSS) и останавливаемся
+      clearInterval(anchorTimer);
+      setTimeout(() => { ctx.clearRect(0, 0, W, H); if (tctx) tctx.clearRect(0, 0, innerWidth, innerHeight); }, 1300);
+      return;
+    }
     requestAnimationFrame(frame);
-    if (!visible || document.hidden || !W) return;
-    const t = now / 1000;
-    mx += (tmx - mx) * .05; my += (tmy - my) * .05;
+    const dt = Math.min((now - last) / 1000, 0.05); last = now; t += dt;
+    drawTrail(now);
+    if (document.hidden || !W) return;
+
+    stage += (stageFromScroll() - stage) * Math.min(1, dt * (reduce ? 20 : 5));
+    const s = Math.max(0, Math.min(STAGE.length - 1, stage));
+    const i = Math.min(STAGE.length - 2, Math.floor(s)), f = s - i;
+    const S = SHAPES(), from = S[i], to = S[i + 1];
+    const A = STAGE[i], B = STAGE[i + 1], e = ease(f);
+    const size = lerp(A.size, B.size, e), bright = lerp(A.bright, B.bright, e);
+
+    const narrow = narrowMQ.matches, va = narrow ? A.narrow : A.wide, vb = narrow ? B.narrow : B.wide;
+    const fit = Math.min(1, 20 * TAN * (W / H) * 0.88 / 9.4);
+    const scale = lerp(va[2] || fit, vb[2] || fit, e), ox = lerp(va[0], vb[0], e), oy = lerp(va[1], vb[1], e);
+
+    const spinW = lerp(A.spin, B.spin, e);
+    if (!reduce) {
+      if (spinW > 0.5) spin += dt * 0.16;
+      else spin += (Math.round(spin / (Math.PI * 2)) * Math.PI * 2 - spin) * Math.min(1, dt * 3);
+    }
+    if (!dragging) { velY *= 0.94; velX *= 0.94; dragRotY += velY; dragRotX += velX; dragRotY *= 1 - (1 - spinW) * dt * 2; dragRotX *= 1 - dt * 1.5; }
+    const mx = mouse.on ? mouse.x / W * 2 - 1 : 0, my = mouse.on ? -(mouse.y / H * 2 - 1) : 0;
+    const ry = spin + dragRotY + mx * 0.25, rx = -0.12 + dragRotX * spinW + my * 0.12;
+    const cy = Math.cos(ry), sy = Math.sin(ry), cx = Math.cos(rx), sx = Math.sin(rx);
+
+    // пролёт камеры сквозь облако осколков
+    const fly = ease(bump(s, 2, 0.75));
+    const camZ = 10 - fly * 8.2, camX = Math.sin(t * 0.2) * 0.3 * fly, roll = fly * 0.35 * Math.sin(s * 3);
+    const cr = Math.cos(roll), sr = Math.sin(roll);
+    const focal = (H / 2) / TAN;
+
+    mouseF += ((mouse.on && !dragging ? 1 : 0) - mouseF) * Math.min(1, dt * 4);
+    burst *= Math.exp(-dt * 2.6);
+    const mR = Math.min(W, H) * 0.16, push = reduce ? 0 : mouseF;
+
     ctx.clearRect(0, 0, W, H);
 
-    for (const s of stars) {
-      ctx.fillStyle = `rgba(167,139,250,${.15 + .35 * (.5 + .5 * Math.sin(t * 1.5 + s[3] * 20))})`;
-      ctx.fillRect(s[0] * W, s[1] * H, s[2], s[2]);
+    // мягкое свечение вокруг сферы и замка
+    const glowA = 0.3 * (1 - bump(s, 2, 1.2)) * (1 - bump(s, 3, 1)) * (1 - bump(s, 4, 1)) * lerp(1, 0.2, bump(s, 5, 1));
+    if (glowA > 0.01) {
+      const gx = W / 2 + (ox - camX) * focal / camZ, gy = H / 2 - oy * focal / camZ, gr = 3.2 * scale * focal / camZ;
+      const g = ctx.createRadialGradient(gx, gy, 0, gx, gy, gr);
+      g.addColorStop(0, `rgba(34,227,238,${glowA * 0.55})`); g.addColorStop(0.45, `rgba(139,92,246,${glowA * 0.35})`); g.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = g; ctx.fillRect(gx - gr, gy - gr, gr * 2, gr * 2);
     }
-    const glow = ctx.createRadialGradient(CX, CY, R * .1, CX, CY, R * 1.7);
-    glow.addColorStop(0, 'rgba(34,227,238,.22)'); glow.addColorStop(.45, 'rgba(139,92,246,.14)'); glow.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(CX, CY, R * 1.7, 0, Math.PI * 2); ctx.fill();
 
-    const rim = ctx.createRadialGradient(CX, CY, R * .82, CX, CY, R * 1.04);
-    rim.addColorStop(0, 'rgba(139,92,246,0)'); rim.addColorStop(.8, 'rgba(34,227,238,.28)'); rim.addColorStop(1, 'rgba(34,227,238,0)');
-    ctx.fillStyle = rim; ctx.beginPath(); ctx.arc(CX, CY, R * 1.04, 0, Math.PI * 2); ctx.fill();
-
-    // орбиты
-    [[1.45, -.35, '34,227,238'], [1.7, .5, '139,92,246']].forEach(([k, a, c], i) => {
-      ctx.save(); ctx.translate(CX, CY); ctx.rotate(a); ctx.scale(1, .3);
-      ctx.strokeStyle = `rgba(${c},.35)`; ctx.lineWidth = 1.2;
-      ctx.beginPath(); ctx.arc(0, 0, R * k, 0, Math.PI * 2); ctx.stroke();
-      const ang = t * (.4 + i * .2);
-      ctx.fillStyle = `rgba(${c},1)`; ctx.shadowColor = `rgba(${c},1)`; ctx.shadowBlur = 14;
-      ctx.beginPath(); ctx.arc(Math.cos(ang) * R * k, Math.sin(ang) * R * k, 4, 0, Math.PI * 2); ctx.fill();
-      ctx.restore();
-    });
-
-    // меридианы
-    ctx.lineWidth = 1;
-    for (let m = 0; m < 12; m++) {
-      const a = m / 12 * Math.PI;
-      ctx.beginPath();
-      for (let k = 0; k <= 48; k++) {
-        const th = k / 48 * Math.PI * 2, p = project([Math.cos(a) * Math.cos(th), Math.sin(th), Math.sin(a) * Math.cos(th)]);
-        k ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]);
-      }
-      ctx.strokeStyle = 'rgba(139,92,246,.12)'; ctx.stroke();
-    }
-    // точки
-    for (const p of pts) {
-      const q = project(p), d = (q[2] + 1) / 2, tw = .6 + .4 * Math.sin(t * 2 + p[3] * 30);
-      ctx.fillStyle = d > .45 ? `rgba(127,244,255,${(.2 + d * .7) * tw})` : `rgba(192,132,252,${(.08 + d * .3) * tw})`;
-      const sz = 1.2 + d * 1.4;
-      ctx.fillRect(q[0] - sz / 2, q[1] - sz / 2, sz, sz);
-    }
-    // дуги данных
-    for (let i = 0; i < arcs.length; i++) {
-      const A = arcs[i];
-      if (!reduce) A.t += A.speed;
-      if (A.t > 1.3) { arcs[i] = newArc(); arcs[i].t = 0; continue; }
-      ctx.beginPath();
-      for (let k = 0; k <= 36; k++) {
-        const u = k / 36, h = 1 + (A.lift - 1) * Math.sin(Math.PI * u), v = slerp(A.a, A.b, u), p = project([v[0] * h, v[1] * h, v[2] * h]);
-        k ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]);
-      }
-      ctx.strokeStyle = `rgba(${A.c},.18)`; ctx.stroke();
-      if (A.t <= 1) {
-        const h = 1 + (A.lift - 1) * Math.sin(Math.PI * A.t), v = slerp(A.a, A.b, A.t), p = project([v[0] * h, v[1] * h, v[2] * h]);
-        const g = ctx.createRadialGradient(p[0], p[1], 0, p[0], p[1], 10);
-        g.addColorStop(0, `rgba(${A.c},1)`); g.addColorStop(1, `rgba(${A.c},0)`);
-        ctx.fillStyle = g; ctx.beginPath(); ctx.arc(p[0], p[1], 10, 0, Math.PI * 2); ctx.fill();
+    ctx.globalCompositeOperation = 'lighter';
+    for (let c = 0; c < 5; c++) {
+      ctx.fillStyle = `rgba(${COLORS[c]},${Math.min(1, 0.95 * bright)})`;
+      const list = group[c];
+      for (let n = 0; n < list.length; n++) {
+        const p = list[n], r = rand[p], j = p * 3;
+        // каждая точка начинает перелёт со своей задержкой — форма «перетекает»
+        const k = ease(Math.max(0, Math.min(1, (f * 1.35 - r * 0.35))));
+        let x = lerp(from[j], to[j], k), y = lerp(from[j + 1], to[j + 1], k), z = lerp(from[j + 2], to[j + 2], k);
+        const sw = Math.sin(Math.PI * k) * (0.6 + r);
+        x += Math.sin(r * 40 + t) * sw * 0.5; y += Math.cos(r * 30 + t) * sw * 0.5;
+        if (!reduce) { x += Math.sin(t * 0.7 + r * 50) * 0.03; y += Math.cos(t * 0.6 + r * 70) * 0.03; }
+        const b = 1 + burst * (0.6 + r * 1.4);
+        x *= b; y *= b; z *= b;
+        // поворот сцены
+        let X = x * cy + z * sy, Z = -x * sy + z * cy;
+        let Y = y * cx - Z * sx; Z = y * sx + Z * cx;
+        X = X * scale + ox - camX; Y = Y * scale + oy; Z *= scale;
+        const d = camZ - Z;
+        if (d < 0.4) continue;
+        const q = focal / d;
+        let px = X * q, py = -Y * q;
+        const rx2 = px * cr - py * sr; py = px * sr + py * cr; px = W / 2 + rx2; py += H / 2;
+        if (push > 0.01) {
+          const dx = px - mouse.x, dy = py - mouse.y, dd = Math.hypot(dx, dy);
+          if (dd < mR && dd > 0.1) { const m = (mR - dd) / mR * 46 * push; px += dx / dd * m; py += dy / dd * m; }
+        }
+        if (px < -10 || py < -10 || px > W + 10 || py > H + 10) continue;
+        const sz = Math.min(8, Math.max(1.2, size * 1.25 * q / (focal / 10)));
+        ctx.fillRect(px - sz / 2, py - sz / 2, sz, sz);
       }
     }
-    lock(t);
-    if (!reduce) rotY += .0035;
+    ctx.globalCompositeOperation = 'source-over';
   }
-  new IntersectionObserver(es => { visible = es[0].isIntersecting; }).observe(canvas);
   requestAnimationFrame(frame);
 };

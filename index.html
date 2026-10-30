@@ -101,7 +101,7 @@
 
   /* ---------- первый экран ---------- */
   .hero { position: relative; min-height: 100vh; min-height: 100svh; display: flex; align-items: center; overflow: hidden; }
-  #scene2d { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  #scene2d { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 0; display: block; pointer-events: none; }
   #scene { opacity: 0; transition: opacity 1.2s ease; }
   #scene2d { transition: opacity 1.2s ease; }
   html.webgl #scene { opacity: 1; }
@@ -145,7 +145,6 @@
                display: flex; align-items: flex-end; justify-content: center; padding: 0 24px 10vh; }
   .story-step { height: 62vh; height: 62svh; }
   .story-step:last-child { height: 100vh; height: 100svh; }
-  html:not(.webgl) .story-step { height: 40vh; }
   .cap .btn { margin-top: 22px; pointer-events: auto; }
   .cap:not(.on) .btn { pointer-events: none; }
   .cap { position: absolute; left: 0; right: 0; bottom: 9vh; margin: 0 auto; max-width: 920px; padding: 0 24px; text-align: center;
@@ -322,7 +321,6 @@
   /* узкие и вытянутые по высоте экраны (телефоны, планшеты, узкие окна): сфера сверху, текст под ней */
   @media (max-width: 900px), (max-aspect-ratio: 23/20) {
     .hero { display: block; min-height: 0; }
-    #scene2d { height: 62vh; height: 62svh; -webkit-mask-image: linear-gradient(#000 70%, transparent); mask-image: linear-gradient(#000 70%, transparent); }
     .hero-grid-bg { height: 62vh; }
     /* текст под сферой на затемнении, чтобы читался */
     .hero-content { padding: 52vh 0 34px; max-width: none; }
@@ -360,6 +358,7 @@
 <script type="importmap">{ "imports": { "three": "./js/three.module.min.js", "three/addons/": "./js/addons/" } }</script>
 </head>
 <body>
+<canvas id="scene2d" aria-hidden="true"></canvas>
 <canvas id="scene" aria-hidden="true"></canvas>
 <canvas id="trail" aria-hidden="true"></canvas>
 
@@ -381,7 +380,6 @@
   <!-- ======== ПЕРВЫЙ ЭКРАН ======== -->
   <div class="hero" data-stage="0">
     <div class="hero-grid-bg"></div>
-    <canvas id="scene2d" aria-hidden="true"></canvas>
     <div class="scroll-cue"><i></i>Листайте</div>
     <div class="wrap" style="width:100%">
       <div class="hero-content">
@@ -655,9 +653,9 @@
   </div>
 </footer>
 
-<script>var ZP_ASSETS = "10";</script>
-<script src="js/page.js?v=4"></script>
-<script src="js/sphere2d.js?v=4"></script>
+<script>var ZP_ASSETS = "11";</script>
+<script src="js/page.js?v=5"></script>
+<script src="js/sphere2d.js?v=6"></script>
 <script>
 // Сначала мгновенно рисуется 2D-сфера; 3D (WebGL) грузится следом и плавно её заменяет.
 // Нет WebGL, старый браузер, ошибка или 3D не успела за 8 секунд — остаётся 2D.
@@ -676,7 +674,6 @@
     document.documentElement.classList.remove('webgl');
   };
   window.zpSceneReady = function () { if (done) return; done = true; document.documentElement.classList.add('webgl'); window.zp2dStop = true; };
-  setTimeout(function () { if (!done) window.zpSceneFail('3D грузится слишком долго'); }, 8000);
   import('./js/scene.js?v=' + ZP_ASSETS).catch(window.zpSceneFail);
 })();
 </script>

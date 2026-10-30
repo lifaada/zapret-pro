@@ -123,7 +123,7 @@
       let active = 0;
       steps.forEach(st => { const r = st.getBoundingClientRect(); if (r.top < mid && r.bottom > mid) active = +st.dataset.step; });
       caps.forEach(c => c.classList.toggle('on', +c.dataset.cap === active));
-      if (hint) hint.classList.toggle('on', active > 0 && document.documentElement.classList.contains('webgl'));
+      if (hint) hint.classList.toggle('on', active > 0);
     };
     addEventListener('scroll', update, { passive: true });
     addEventListener('resize', update);
