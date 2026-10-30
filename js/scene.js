@@ -1,4 +1,6 @@
-// 3D-сцена первого экрана: голографическая сфера, дуги данных, частицы и замок, который открывается.
+// Кино из частиц: ~24 000 светящихся точек перетекают по ходу прокрутки
+// сфера → замок → взрыв (камера пролетает сквозь осколки) → надпись ZAPRET PRO → значки видео и голоса → звёздная пыль → сфера.
+// Интерактив: частицы разбегаются от курсора, сферу можно крутить мышью, клик — взрыв, за курсором неоновый след.
 import * as THREE from 'three';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
@@ -6,320 +8,355 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
 const canvas = document.getElementById('scene');
-const hero = document.querySelector('.hero');
 const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
-const mobile = matchMedia('(max-width: 900px)').matches;
-// то же правило, что в CSS: на узких и вытянутых по высоте экранах сфера по центру над текстом
 const narrowMQ = matchMedia('(max-width: 900px), (max-aspect-ratio: 23/20)');
+const finePointer = matchMedia('(pointer: fine)').matches;
+const weak = matchMedia('(max-width: 900px)').matches || (navigator.hardwareConcurrency || 8) <= 4;
+const N = weak ? 12000 : 24000;
 
 // Ошибка здесь отклоняет import() — страница оставит 2D-сферу.
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: 'high-performance' });
+// Холст непрозрачный: свечение (bloom) на прозрачном фоне даёт «молочную» дымку поверх страницы.
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, alpha: false, powerPreference: 'high-performance' });
+renderer.setClearColor(0x000000, 1);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, weak ? 1.25 : 1.6));
+renderer.toneMapping = THREE.NoToneMapping;
 canvas.addEventListener('webglcontextlost', e => { e.preventDefault(); window.zpSceneFail && window.zpSceneFail('видеокарта сбросила WebGL'); });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, mobile ? 1.5 : 1.75));
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.05;
 
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 100);
+const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 200);
 camera.position.set(0, 0, 10);
-
-const C = {
-  cyan: new THREE.Color('#22e3ee'),
-  mint: new THREE.Color('#2dd4bf'),
-  violet: new THREE.Color('#8b5cf6'),
-  blue: new THREE.Color('#3b82f6'),
-  pink: new THREE.Color('#c084fc'),
-};
-
-const world = new THREE.Group();   // всё, что двигается вместе со сферой
+const world = new THREE.Group();
 scene.add(world);
-const globe = new THREE.Group();
-world.add(globe);
-const R = 1.7;
 
-// ---------- Ядро: стеклянная сфера со свечением по краям (френель) и бегущими строками сканирования ----------
-const fresnelMat = (inner, outer, power, alpha, side, scan) => new THREE.ShaderMaterial({
-  transparent: true, depthWrite: false, side, blending: THREE.AdditiveBlending,
-  uniforms: { uTime: { value: 0 }, cIn: { value: inner }, cOut: { value: outer }, uPow: { value: power }, uA: { value: alpha }, uScan: { value: scan } },
-  vertexShader: `
-    varying vec3 vN; varying vec3 vV; varying vec3 vP;
-    void main() {
-      vec4 wp = modelMatrix * vec4(position, 1.0);
-      vP = position;
-      vN = normalize(mat3(modelMatrix) * normal);
-      vV = normalize(cameraPosition - wp.xyz);
-      gl_Position = projectionMatrix * viewMatrix * wp;
-    }`,
-  fragmentShader: `
-    uniform float uTime, uPow, uA, uScan; uniform vec3 cIn, cOut;
-    varying vec3 vN; varying vec3 vV; varying vec3 vP;
-    void main() {
-      float f = pow(1.0 - abs(dot(normalize(vN), normalize(vV))), uPow);
-      vec3 col = mix(cIn, cOut, f);
-      float scan = uScan * (0.5 + 0.5 * sin(vP.y * 38.0 - uTime * 2.2)) * 0.18;
-      float band = uScan * smoothstep(0.035, 0.0, abs(fract(vP.y * 0.32 - uTime * 0.12) - 0.5)) * 0.9;
-      gl_FragColor = vec4(col, (f + scan + band * f) * uA);
-    }`,
+// ---------- Формы: каждая — N точек ----------
+function sampleCanvas(w, h, scale, depth, draw) {
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  const g = c.getContext('2d');
+  draw(g, w, h);
+  const d = g.getImageData(0, 0, w, h).data, px = [];
+  for (let y = 0; y < h; y += 2) for (let x = 0; x < w; x += 2) if (d[(y * w + x) * 4 + 3] > 120) px.push(x, y);
+  const out = new Float32Array(N * 3);
+  const n = px.length / 2;
+  for (let i = 0; i < N; i++) {
+    const k = (Math.random() * n | 0) * 2;
+    out[i * 3] = (px[k] - w / 2 + Math.random() * 2) * scale;
+    out[i * 3 + 1] = -(px[k + 1] - h / 2 + Math.random() * 2) * scale;
+    out[i * 3 + 2] = (Math.random() - 0.5) * depth;
+  }
+  return out;
+}
+function fill(fn) {
+  const out = new Float32Array(N * 3);
+  for (let i = 0; i < N; i++) { const p = fn(i); out[i * 3] = p[0]; out[i * 3 + 1] = p[1]; out[i * 3 + 2] = p[2]; }
+  return out;
+}
+const rdir = () => { const u = Math.random() * 2 - 1, t = Math.random() * Math.PI * 2, s = Math.sqrt(1 - u * u); return [Math.cos(t) * s, u, Math.sin(t) * s]; };
+
+const SPHERE = fill(i => {
+  if (i % 7 === 0) { const d = rdir(), r = Math.cbrt(Math.random()) * 1.9; return [d[0] * r, d[1] * r, d[2] * r]; } // немного внутри
+  const y = 1 - (i / (N - 1)) * 2, r = Math.sqrt(1 - y * y), t = i * 2.399963, R = 2.1 + (Math.random() - 0.5) * 0.05;
+  return [Math.cos(t) * r * R, y * R, Math.sin(t) * r * R];
 });
-const core = new THREE.Mesh(new THREE.SphereGeometry(R, 96, 96), fresnelMat(C.violet, C.cyan, 2.6, 0.42, THREE.FrontSide, 0.55));
-globe.add(core);
-const atmosphere = new THREE.Mesh(new THREE.SphereGeometry(R * 1.22, 64, 64), fresnelMat(C.blue, C.violet, 3.2, 0.32, THREE.BackSide, 0));
-world.add(atmosphere);
+const LOCK = sampleCanvas(600, 600, 5 / 600, 0.7, (g) => {
+  g.fillStyle = '#fff'; g.strokeStyle = '#fff';
+  g.lineWidth = 62; g.lineCap = 'round';
+  g.beginPath(); g.moveTo(178, 300); g.lineTo(178, 220); g.arc(300, 220, 122, Math.PI, 0); g.lineTo(422, 300); g.stroke();
+  g.beginPath(); g.roundRect(130, 270, 340, 270, 46); g.fill();
+  g.globalCompositeOperation = 'destination-out';
+  g.beginPath(); g.arc(300, 375, 38, 0, Math.PI * 2); g.fill();
+  g.fillRect(284, 375, 32, 90);
+});
+const SHATTER = fill(() => { const d = rdir(), r = 3 + Math.pow(Math.random(), 0.7) * 14; return [d[0] * r, d[1] * r * 0.8, d[2] * r]; });
+const DUST = fill(() => [(Math.random() - 0.5) * 34, (Math.random() - 0.5) * 20, -16 + Math.random() * 18]);
+let TEXT = SPHERE, ICONS = SPHERE;
 
-// ---------- Каркас ----------
-const wire = new THREE.LineSegments(
-  new THREE.WireframeGeometry(new THREE.IcosahedronGeometry(R * 1.004, 4)),
-  new THREE.LineBasicMaterial({ color: C.cyan, transparent: true, opacity: 0.07, blending: THREE.AdditiveBlending, depthWrite: false }));
-globe.add(wire);
+function buildTextShapes() {
+  TEXT = sampleCanvas(1500, 320, 9.2 / 1500, 0.35, (g, w, h) => {
+    g.fillStyle = '#fff'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.font = '700 200px Unbounded, "Segoe UI", sans-serif';
+    g.fillText('ZAPRET PRO', w / 2, h / 2 + 6);
+  });
+  ICONS = sampleCanvas(1400, 520, 8.4 / 1400, 0.5, (g) => {
+    g.fillStyle = '#fff'; g.strokeStyle = '#fff';
+    // видео: скруглённый прямоугольник с треугольником «play»
+    g.beginPath(); g.roundRect(130, 110, 560, 330, 90); g.fill();
+    g.globalCompositeOperation = 'destination-out';
+    g.beginPath(); g.moveTo(350, 185); g.lineTo(350, 365); g.lineTo(510, 275); g.closePath(); g.fill();
+    g.globalCompositeOperation = 'source-over';
+    // голос: микрофон
+    g.beginPath(); g.roundRect(950, 70, 150, 250, 75); g.fill();
+    g.lineWidth = 38; g.lineCap = 'round';
+    g.beginPath(); g.arc(1025, 240, 150, 0.15 * Math.PI, 0.85 * Math.PI); g.stroke();
+    g.beginPath(); g.moveTo(1025, 390); g.lineTo(1025, 455); g.stroke();
+    g.beginPath(); g.moveTo(945, 462); g.lineTo(1105, 462); g.stroke();
+  });
+}
+buildTextShapes();
+// Надпись рисуется шрифтом Unbounded — пересобираем, когда он загрузится.
+if (document.fonts && document.fonts.load) document.fonts.load('700 200px Unbounded').then(() => { buildTextShapes(); pairIndex = -1; }).catch(() => {});
 
-// ---------- Точки на поверхности (мерцают) ----------
-const dotShader = (sizeMul) => new THREE.ShaderMaterial({
-  transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
-  uniforms: { uTime: { value: 0 }, uPR: { value: renderer.getPixelRatio() }, uSize: { value: sizeMul } },
+// Порядок сцен (индексы — этапы прокрутки 0…6)
+const SHAPES = () => [SPHERE, LOCK, SHATTER, TEXT, ICONS, DUST, SPHERE];
+// size — размер точек, bright — яркость, spin — вращается ли форма;
+// wide/narrow — положение (x, y) и масштаб на широком и узком экране (масштаб 0 = вписать в ширину)
+const STAGE = [
+  { size: 1.9, bright: 1.0, spin: 1, wide: [3.0, 0.1, 1.0], narrow: [0, 1.9, 0.72] },
+  { size: 2.1, bright: 1.15, spin: 0, wide: [0, 0.55, 0.95], narrow: [0, 1.1, 0.7] },
+  { size: 1.7, bright: 0.85, spin: 1, wide: [0, 0, 1], narrow: [0, 0, 1] },
+  { size: 1.45, bright: 1.2, spin: 0, wide: [0, 0.6, 1], narrow: [0, 1.0, 0] },
+  { size: 1.55, bright: 1.15, spin: 0, wide: [0, 0.5, 1], narrow: [0, 1.0, 0] },
+  { size: 1.25, bright: 0.32, spin: 1, wide: [0, 0, 1], narrow: [0, 0, 1] },
+  { size: 1.8, bright: 0.7, spin: 1, wide: [0, 0.2, 0.9], narrow: [0, 0.6, 0.7] },
+];
+
+// ---------- Частицы ----------
+const geo = new THREE.BufferGeometry();
+const aFrom = new THREE.BufferAttribute(new Float32Array(N * 3), 3);
+const aTo = new THREE.BufferAttribute(new Float32Array(N * 3), 3);
+aFrom.setUsage(THREE.DynamicDrawUsage); aTo.setUsage(THREE.DynamicDrawUsage);
+const rand = new Float32Array(N), col = new Float32Array(N * 3);
+const palette = [new THREE.Color('#22e3ee'), new THREE.Color('#7ff4ff'), new THREE.Color('#8b5cf6'), new THREE.Color('#c084fc'), new THREE.Color('#2dd4bf')];
+for (let i = 0; i < N; i++) {
+  rand[i] = Math.random();
+  const r = Math.random(), c = r < 0.38 ? palette[0] : r < 0.55 ? palette[1] : r < 0.75 ? palette[2] : r < 0.9 ? palette[3] : palette[4];
+  c.toArray(col, i * 3);
+}
+geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(N * 3), 3)); // реальные позиции считает шейдер
+geo.setAttribute('aFrom', aFrom);
+geo.setAttribute('aTo', aTo);
+geo.setAttribute('aRand', new THREE.BufferAttribute(rand, 1));
+geo.setAttribute('aColor', new THREE.BufferAttribute(col, 3));
+geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 60);
+
+const uniforms = {
+  uMix: { value: 0 }, uTime: { value: 0 }, uSize: { value: 1.9 }, uBright: { value: 1 }, uPR: { value: renderer.getPixelRatio() },
+  uBurst: { value: 0 }, uSwirl: { value: 1.3 },
+  uMouse: { value: new THREE.Vector2(9, 9) }, uMouseF: { value: 0 }, uTan: { value: new THREE.Vector2(1, 1) },
+};
+const mat = new THREE.ShaderMaterial({
+  uniforms, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
   vertexShader: `
-    attribute float aSeed; attribute vec3 aColor;
-    uniform float uTime, uPR, uSize; varying vec3 vC; varying float vT;
+    uniform float uMix, uTime, uSize, uPR, uBurst, uSwirl, uMouseF;
+    uniform vec2 uMouse, uTan;
+    attribute vec3 aFrom, aTo, aColor; attribute float aRand;
+    varying vec3 vC; varying float vA;
     void main() {
-      vec4 mv = modelViewMatrix * vec4(position, 1.0);
-      vT = 0.55 + 0.45 * sin(uTime * (1.2 + aSeed * 2.0) + aSeed * 40.0);
-      vC = aColor;
-      gl_PointSize = uSize * uPR * (0.6 + aSeed) * (22.0 / -mv.z);
+      float m = clamp((uMix - aRand * 0.35) / 0.65, 0.0, 1.0);
+      m = m * m * (3.0 - 2.0 * m);
+      vec3 p = mix(aFrom, aTo, m);
+      float sw = sin(3.14159 * m) * uSwirl;
+      p += vec3(sin(aRand * 40.0 + uTime * 0.7), cos(aRand * 31.0 + uTime * 0.6), sin(aRand * 17.0 - uTime * 0.5)) * sw * (0.5 + aRand);
+      p += vec3(sin(uTime * 0.9 + aRand * 60.0), cos(uTime * 0.8 + aRand * 50.0), sin(uTime * 0.7 + aRand * 70.0)) * 0.022;
+      p += normalize(p + vec3(0.0001)) * uBurst * (0.8 + aRand * 2.2);
+      vec4 mv = modelViewMatrix * vec4(p, 1.0);
+      // частицы разбегаются от курсора
+      vec2 mp = uMouse * uTan * -mv.z;
+      vec2 d = mv.xy - mp; float dl = length(d);
+      float r = 0.13 * -mv.z;
+      mv.xy += normalize(d + 0.00001) * (1.0 - smoothstep(0.0, r, dl)) * uMouseF * r * 0.9;
       gl_Position = projectionMatrix * mv;
+      gl_PointSize = uSize * uPR * (0.55 + aRand * 0.9) * (10.0 / -mv.z);
+      vC = aColor;
+      vA = 0.6 + 0.4 * sin(uTime * 2.2 + aRand * 80.0);
     }`,
   fragmentShader: `
-    varying vec3 vC; varying float vT;
+    uniform float uBright; varying vec3 vC; varying float vA;
     void main() {
       float d = length(gl_PointCoord - 0.5);
       float a = smoothstep(0.5, 0.0, d);
-      gl_FragColor = vec4(vC, a * vT);
+      gl_FragColor = vec4(vC * (0.45 + 0.75 * a), a * vA * uBright * 0.85);
     }`,
 });
-function points(count, place, colorPick, sizeMul) {
-  const pos = new Float32Array(count * 3), seed = new Float32Array(count), col = new Float32Array(count * 3);
-  for (let i = 0; i < count; i++) {
-    const p = place(i);
-    pos.set(p, i * 3);
-    seed[i] = Math.random();
-    colorPick(i).toArray(col, i * 3);
-  }
-  const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-  g.setAttribute('aSeed', new THREE.BufferAttribute(seed, 1));
-  g.setAttribute('aColor', new THREE.BufferAttribute(col, 3));
-  return new THREE.Points(g, dotShader(sizeMul));
-}
-const SURF = mobile ? 1400 : 2600;
-const surface = points(SURF, i => {
-  const y = 1 - (i / (SURF - 1)) * 2, r = Math.sqrt(1 - y * y), t = i * 2.399963;
-  return [Math.cos(t) * r * R * 1.01, y * R * 1.01, Math.sin(t) * r * R * 1.01];
-}, () => (Math.random() < 0.72 ? C.cyan : C.pink), 1.0);
-globe.add(surface);
+world.add(new THREE.Points(geo, mat));
 
-// ---------- Звёздная пыль вокруг ----------
-const DUST = mobile ? 900 : 2200;
-const dust = points(DUST, () => {
-  const r = 3.2 + Math.pow(Math.random(), 0.6) * 6.5, u = Math.random() * 2 - 1, t = Math.random() * Math.PI * 2, s = Math.sqrt(1 - u * u);
-  return [Math.cos(t) * s * r, u * r * 0.7, Math.sin(t) * s * r];
-}, () => (Math.random() < 0.5 ? C.violet : Math.random() < 0.5 ? C.blue : C.cyan), 0.7);
-world.add(dust);
+// мягкое ядро-свечение под сферой
+const glowTex = (() => {
+  const c = document.createElement('canvas'); c.width = c.height = 128;
+  const g = c.getContext('2d'), gr = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+  gr.addColorStop(0, 'rgba(34,227,238,.4)'); gr.addColorStop(0.45, 'rgba(139,92,246,.14)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
+  g.fillStyle = gr; g.fillRect(0, 0, 128, 128);
+  return new THREE.CanvasTexture(c);
+})();
+const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+glow.scale.setScalar(6);
+world.add(glow);
 
-// ---------- Орбиты со спутниками ----------
-const rings = [];
-[[2.45, 1.15, 0.25, C.cyan], [2.85, -0.9, -0.5, C.violet], [3.3, 0.35, 1.1, C.blue]].forEach(([r, tx, tz, color], i) => {
-  const ring = new THREE.Mesh(new THREE.TorusGeometry(r, 0.006, 8, 220),
-    new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false }));
-  const holder = new THREE.Group();
-  holder.rotation.set(tx, 0, tz);
-  holder.add(ring);
-  const sat = new THREE.Mesh(new THREE.SphereGeometry(0.045, 16, 16), new THREE.MeshBasicMaterial({ color: color.clone().multiplyScalar(2.5) }));
-  holder.add(sat);
-  world.add(holder);
-  rings.push({ holder, sat, r, speed: 0.25 + i * 0.12, phase: i * 2.1 });
-});
-
-// ---------- Дуги данных с бегущими импульсами ----------
-const arcMat = new THREE.ShaderMaterial({
-  transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
-  uniforms: { uTime: { value: 0 } },
-  vertexShader: `
-    attribute float aOffset; attribute float aSpeed; attribute vec3 aColor;
-    varying vec2 vUv; varying float vO; varying float vS; varying vec3 vC;
-    void main() { vUv = uv; vO = aOffset; vS = aSpeed; vC = aColor; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
-  fragmentShader: `
-    uniform float uTime; varying vec2 vUv; varying float vO; varying float vS; varying vec3 vC;
-    void main() {
-      float head = fract(uTime * vS + vO);
-      float d = head - vUv.x;
-      float pulse = d >= 0.0 ? exp(-d * 18.0) : 0.0;
-      float base = 0.10;
-      float a = base + pulse * 1.6;
-      gl_FragColor = vec4(vC * (0.6 + pulse * 2.4), a);
-    }`,
-});
-const randOnSphere = () => new THREE.Vector3().randomDirection().multiplyScalar(R * 1.01);
-const ARCS = mobile ? 14 : 26;
-for (let i = 0; i < ARCS; i++) {
-  const a = randOnSphere(), b = randOnSphere();
-  if (a.angleTo(b) < 0.6) { i--; continue; }
-  const mid = a.clone().add(b).multiplyScalar(0.5).normalize().multiplyScalar(R * (1.35 + Math.random() * 0.55));
-  const curve = new THREE.QuadraticBezierCurve3(a, mid, b);
-  const geo = new THREE.TubeGeometry(curve, 64, 0.0085, 6, false);
-  const n = geo.attributes.position.count;
-  const off = new Float32Array(n).fill(Math.random()), spd = new Float32Array(n).fill(0.18 + Math.random() * 0.35), col = new Float32Array(n * 3);
-  const c = Math.random() < 0.65 ? C.cyan : C.pink;
-  for (let k = 0; k < n; k++) c.toArray(col, k * 3);
-  geo.setAttribute('aOffset', new THREE.BufferAttribute(off, 1));
-  geo.setAttribute('aSpeed', new THREE.BufferAttribute(spd, 1));
-  geo.setAttribute('aColor', new THREE.BufferAttribute(col, 3));
-  globe.add(new THREE.Mesh(geo, arcMat));
-}
-
-// ---------- Замок в центре ----------
-const lock = new THREE.Group();
-world.add(lock);
-const bodyShape = new THREE.Shape();
-const w = 0.62, h = 0.5, rr = 0.12;
-bodyShape.moveTo(-w + rr, -h); bodyShape.lineTo(w - rr, -h); bodyShape.quadraticCurveTo(w, -h, w, -h + rr);
-bodyShape.lineTo(w, h - rr); bodyShape.quadraticCurveTo(w, h, w - rr, h); bodyShape.lineTo(-w + rr, h);
-bodyShape.quadraticCurveTo(-w, h, -w, h - rr); bodyShape.lineTo(-w, -h + rr); bodyShape.quadraticCurveTo(-w, -h, -w + rr, -h);
-const key = new THREE.Path();
-key.absarc(0, 0.06, 0.11, 0, Math.PI * 2, true);
-bodyShape.holes.push(key);
-const bodyGeo = new THREE.ExtrudeGeometry(bodyShape, { depth: 0.32, bevelEnabled: true, bevelThickness: 0.05, bevelSize: 0.045, bevelSegments: 6, curveSegments: 24 });
-bodyGeo.center();
-const bodyMat = new THREE.MeshStandardMaterial({ color: '#0a0d24', metalness: 0.8, roughness: 0.25, emissive: new THREE.Color('#2a1f8a'), emissiveIntensity: 0.45 });
-const body = new THREE.Mesh(bodyGeo, bodyMat);
-lock.add(body);
-const bodyEdges = new THREE.LineSegments(new THREE.EdgesGeometry(bodyGeo, 25),
-  new THREE.LineBasicMaterial({ color: C.cyan.clone().multiplyScalar(2.2), transparent: true, opacity: 0.95 }));
-lock.add(bodyEdges);
-// светящаяся замочная скважина
-const keyGlow = new THREE.Mesh(new THREE.CircleGeometry(0.1, 32), new THREE.MeshBasicMaterial({ color: C.cyan.clone().multiplyScalar(3) }));
-keyGlow.position.set(0, 0.06, 0.215);
-lock.add(keyGlow);
-const slotGlow = new THREE.Mesh(new THREE.PlaneGeometry(0.1, 0.24), new THREE.MeshBasicMaterial({ color: C.cyan.clone().multiplyScalar(3) }));
-slotGlow.position.set(0, -0.08, 0.215);
-lock.add(slotGlow);
-
-// дужка: половина тора + две ножки; вращается вокруг левой ножки
-const shackle = new THREE.Group();
-const shMat = new THREE.MeshStandardMaterial({ color: '#cfe9ff', metalness: 1, roughness: 0.18, emissive: C.cyan, emissiveIntensity: 0.35 });
-const sr = 0.38, st = 0.075;
-const arc = new THREE.Mesh(new THREE.TorusGeometry(sr, st, 20, 48, Math.PI), shMat);
-arc.position.y = 0.42;
-const legL = new THREE.Mesh(new THREE.CylinderGeometry(st, st, 0.42, 20), shMat);
-legL.position.set(-sr, 0.21, 0);
-const legR = legL.clone();
-legR.position.x = sr;
-const shInner = new THREE.Group();
-shInner.add(arc, legL, legR);
-shInner.position.set(sr, 0, 0);   // точка вращения — левая ножка
-shackle.add(shInner);
-shackle.position.set(-sr, h - 0.02, 0);
-lock.add(shackle);
-lock.scale.setScalar(0.92);
-
-// вспышка-кольцо при открытии
-const burst = new THREE.Mesh(new THREE.RingGeometry(0.98, 1.0, 96),
-  new THREE.MeshBasicMaterial({ color: C.cyan.clone().multiplyScalar(2), transparent: true, opacity: 0, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false }));
-world.add(burst);
-
-// свет для металла замка
-scene.add(new THREE.AmbientLight('#4a3d8f', 0.6));
-const l1 = new THREE.PointLight(C.cyan, 30, 20); l1.position.set(3, 2.5, 4); scene.add(l1);
-const l2 = new THREE.PointLight(C.violet, 30, 20); l2.position.set(-3.5, -1.5, 3); scene.add(l2);
-const l3 = new THREE.PointLight('#ffffff', 8, 10); l3.position.set(0, 0, 4); scene.add(l3);
-
-// ---------- Свечение (bloom) ----------
+// ---------- Свечение ----------
 const composer = new EffectComposer(renderer);
 composer.addPass(new RenderPass(scene, camera));
-const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), mobile ? 0.7 : 0.82, 0.55, 0.2);
+const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), weak ? 0.55 : 0.7, 0.2, 0.35);
 composer.addPass(bloom);
 composer.addPass(new OutputPass());
 
-// ---------- Размер, мышь, прокрутка ----------
+// ---------- Размер ----------
 let W = 1, H = 1;
 function resize() {
-  W = canvas.clientWidth; H = canvas.clientHeight;
+  W = canvas.clientWidth || innerWidth; H = canvas.clientHeight || innerHeight;
   renderer.setSize(W, H, false);
   composer.setSize(W, H);
-  bloom.setSize(W, H);
+  bloom.setSize(Math.round(W * 0.6), Math.round(H * 0.6));
   camera.aspect = W / H;
   camera.updateProjectionMatrix();
-  // на широком экране сфера справа от текста, на узком — по центру позади
-  const wide = !narrowMQ.matches;
-  world.position.set(wide ? 3.05 : 0, wide ? 0.1 : 0.15, 0);
-  world.scale.setScalar(wide ? 0.86 : Math.min(0.78, 0.5 * camera.aspect + 0.28));
+  const t = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+  uniforms.uTan.value.set(t * camera.aspect, t);
+  measureAnchors();
 }
+
+// ---------- Прокрутка → этап ----------
+let anchors = [];
+function measureAnchors() {
+  anchors = [...document.querySelectorAll('[data-stage]')].map(el => {
+    const r = el.getBoundingClientRect();
+    return { v: +el.dataset.stage, y: r.top + scrollY + r.height / 2 };
+  }).sort((a, b) => a.y - b.y);
+}
+function stageFromScroll() {
+  if (!anchors.length) return 0;
+  const y = scrollY + innerHeight / 2;
+  if (y <= anchors[0].y) return anchors[0].v;
+  for (let i = 0; i < anchors.length - 1; i++) {
+    const a = anchors[i], b = anchors[i + 1];
+    if (y <= b.y) return a.v + (b.v - a.v) * (y - a.y) / Math.max(1, b.y - a.y);
+  }
+  return anchors[anchors.length - 1].v;
+}
+
+let pairIndex = -1;
+function setPair(i) {
+  if (i === pairIndex) return;
+  pairIndex = i;
+  const S = SHAPES();
+  aFrom.array.set(S[i]); aTo.array.set(S[Math.min(i + 1, S.length - 1)]);
+  aFrom.needsUpdate = true; aTo.needsUpdate = true;
+}
+
+// ---------- Мышь: разбегание, вращение, взрыв ----------
+const mouse = { x: 9, y: 9, on: false };
+let dragging = false, lastX = 0, lastY = 0, velX = 0, velY = 0, dragRotY = 0, dragRotX = 0, burst = 0, burstV = 0;
+let downAt = 0, downX = 0, downY = 0;
+const interactive = el => el.closest && el.closest('a, button, summary, details, input, label, #demo, .glass, header');
+addEventListener('pointermove', e => {
+  mouse.x = (e.clientX / innerWidth) * 2 - 1; mouse.y = -(e.clientY / innerHeight) * 2 + 1; mouse.on = true;
+  if (dragging) {
+    velY = (e.clientX - lastX) * 0.006; velX = (e.clientY - lastY) * 0.004;
+    dragRotY += velY; dragRotX += velX;
+    lastX = e.clientX; lastY = e.clientY;
+  }
+}, { passive: true });
+document.addEventListener('pointerleave', () => { mouse.on = false; });
+addEventListener('pointerdown', e => {
+  if (e.button !== 0 || interactive(e.target)) return;
+  dragging = true; lastX = e.clientX; lastY = e.clientY; downAt = performance.now(); downX = e.clientX; downY = e.clientY;
+});
+addEventListener('pointerup', e => {
+  if (!dragging) return;
+  dragging = false;
+  // короткий клик без перетаскивания — взрыв
+  if (performance.now() - downAt < 300 && Math.hypot(e.clientX - downX, e.clientY - downY) < 6) burstV += 0.6;
+});
+window.addEventListener('zp-unlock', () => { burstV += 0.25; });
+
+// ---------- Неоновый след за курсором ----------
+const trail = document.getElementById('trail');
+const tctx = trail && finePointer && !reduce ? trail.getContext('2d') : null;
+const pts = [];
+function sizeTrail() {
+  if (!tctx) return;
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  trail.width = innerWidth * dpr; trail.height = innerHeight * dpr;
+  tctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+if (tctx) addEventListener('pointermove', e => { pts.push({ x: e.clientX, y: e.clientY, t: performance.now() }); }, { passive: true });
+let trailDirty = false;
+function drawTrail(now) {
+  if (!tctx) return;
+  while (pts.length && now - pts[0].t > 380) pts.shift();
+  if (pts.length < 2) { if (trailDirty) { tctx.clearRect(0, 0, innerWidth, innerHeight); trailDirty = false; } return; }
+  tctx.clearRect(0, 0, innerWidth, innerHeight);
+  trailDirty = true;
+  tctx.lineCap = 'round'; tctx.lineJoin = 'round';
+  for (let pass = 0; pass < 2; pass++) {
+    for (let i = 1; i < pts.length; i++) {
+      const a = pts[i - 1], b = pts[i], k = 1 - (now - b.t) / 380;
+      tctx.strokeStyle = pass ? `rgba(220,252,255,${k * 0.9})` : `rgba(${i % 2 ? '34,227,238' : '139,92,246'},${k * 0.35})`;
+      tctx.lineWidth = pass ? 1.6 * k + 0.4 : 10 * k + 2;
+      tctx.beginPath(); tctx.moveTo(a.x, a.y); tctx.lineTo(b.x, b.y); tctx.stroke();
+    }
+  }
+}
+
 new ResizeObserver(() => resize()).observe(canvas);
-addEventListener('resize', resize);
+addEventListener('resize', () => { resize(); sizeTrail(); });
 document.addEventListener('fullscreenchange', resize);
-narrowMQ.addEventListener ? narrowMQ.addEventListener('change', resize) : narrowMQ.addListener(resize);
-resize();
+(narrowMQ.addEventListener ? narrowMQ.addEventListener('change', resize) : narrowMQ.addListener(resize));
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(measureAnchors);
+addEventListener('load', measureAnchors);
+setInterval(measureAnchors, 2000); // высота страницы меняется (картинки, раскрытые вопросы)
+resize(); sizeTrail();
 
-const mouse = { x: 0, y: 0, tx: 0, ty: 0 };
-addEventListener('pointermove', e => { mouse.tx = (e.clientX / innerWidth - 0.5); mouse.ty = (e.clientY / innerHeight - 0.5); });
-let scrollK = 0;
-addEventListener('scroll', () => { scrollK = Math.min(1, scrollY / Math.max(1, H)); }, { passive: true });
-
-// ---------- Анимация открытия замка ----------
-let unlockAt = 1.4, relockAt = Infinity, state = 0; // 0 закрыт, 1 открыт
-const ease = t => 1 - Math.pow(1 - Math.min(1, Math.max(0, t)), 3);
-window.addEventListener('zp-unlock', () => { if (state === 0) unlockAt = clock.elapsedTime; });
-
-let visible = true;
-new IntersectionObserver(es => { visible = es[0].isIntersecting; }).observe(hero);
-document.addEventListener('visibilitychange', () => { if (!document.hidden) clock.getDelta(); });
-
+// ---------- Анимация ----------
+const lerp = (a, b, t) => a + (b - a) * t;
+const ease = t => t * t * (3 - 2 * t);
+const bump = (x, c, w) => Math.max(0, 1 - Math.abs(x - c) / w);
+let stage = stageFromScroll(), spin = 0, mouseF = 0;
 const clock = new THREE.Clock();
 let firstFrame = true;
+
 function tick() {
   if (window.zpStop3D) return;
   requestAnimationFrame(tick);
-  if (!visible || document.hidden) return;
-  const dt = Math.min(clock.getDelta(), 0.05);
-  const t = clock.elapsedTime;
-  const sp = reduce ? 0 : 1;
+  const now = performance.now();
+  drawTrail(now);
+  if (document.hidden) return;
+  const dt = Math.min(clock.getDelta(), 0.05), t = clock.elapsedTime;
 
-  for (const m of [core.material, atmosphere.material, surface.material, dust.material, arcMat]) m.uniforms.uTime.value = t * sp;
-  globe.rotation.y += dt * 0.12 * sp;
-  dust.rotation.y -= dt * 0.015 * sp;
-  rings.forEach(r => {
-    const a = t * r.speed * sp + r.phase;
-    r.sat.position.set(Math.cos(a) * r.r, Math.sin(a) * r.r, 0);
-    r.holder.rotation.y += dt * 0.05 * sp;
-  });
+  // плавно догоняем этап прокрутки
+  const target = stageFromScroll();
+  stage += (target - stage) * Math.min(1, dt * (reduce ? 20 : 5));
+  const s = Math.max(0, Math.min(STAGE.length - 1, stage));
+  const i = Math.min(STAGE.length - 2, Math.floor(s)), f = s - i;
+  setPair(i);
+  uniforms.uMix.value = f;
+  const A = STAGE[i], B = STAGE[i + 1], e = ease(f);
+  uniforms.uSize.value = lerp(A.size, B.size, e);
+  uniforms.uBright.value = lerp(A.bright, B.bright, e);
+  uniforms.uTime.value = reduce ? 0 : t;
 
-  mouse.x += (mouse.tx - mouse.x) * 0.05;
-  mouse.y += (mouse.ty - mouse.y) * 0.05;
-  world.rotation.y = mouse.x * 0.5;
-  world.rotation.x = mouse.y * 0.3 + scrollK * 0.4;
-  lock.rotation.y = -world.rotation.y * 0.6 + Math.sin(t * 0.8) * 0.12 * sp;
-  lock.rotation.x = -world.rotation.x * 0.6;
-  lock.position.y = Math.sin(t * 1.3) * 0.05 * sp;
-  camera.position.z = 10 + scrollK * 2.5;
-  camera.position.y = -scrollK * 1.2;
-  camera.lookAt(world.position.x * 0.35, world.position.y * 0.5 - scrollK * 0.6, 0);
+  // расположение формы: справа от текста на широком экране, над текстом на узком
+  const narrow = narrowMQ.matches, va = narrow ? A.narrow : A.wide, vb = narrow ? B.narrow : B.wide;
+  const fit = Math.min(1, 20 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camera.aspect * 0.88 / 9.4); // надпись и значки вписываем в ширину
+  const sa = va[2] || fit, sb = vb[2] || fit;
+  world.position.set(lerp(va[0], vb[0], e), lerp(va[1], vb[1], e), 0);
+  world.scale.setScalar(lerp(sa, sb, e));
 
-  // замок: открывается, через 7 с закрывается, снова открывается — «обход блокировки»
-  if (state === 0 && t >= unlockAt) { state = 1; relockAt = t + 7; burstStart = t; }
-  if (state === 1 && t >= relockAt) { state = 0; unlockAt = t + 2.2; }
-  const k = state === 1 ? ease((t - (relockAt - 7)) / 0.9) : 1 - ease((t - (unlockAt - 2.2)) / 0.6);
-  shackle.position.y = (h - 0.02) + k * 0.22;
-  shInner.rotation.y = k * -1.05;
-  shInner.parent.rotation.y = 0;
-  keyGlow.material.color.copy(C.cyan).lerp(C.mint, k).multiplyScalar(3 + k * 2);
-  bodyMat.emissiveIntensity = 0.55 + k * 0.35;
+  // вращение: сфера и облака крутятся, замок/надпись/значки разворачиваются к зрителю
+  const spinW = lerp(A.spin, B.spin, e);
+  if (!reduce) {
+    if (spinW > 0.5) spin += dt * 0.16;
+    else spin += (Math.round(spin / (Math.PI * 2)) * Math.PI * 2 - spin) * Math.min(1, dt * 3);
+  }
+  if (!dragging) { velY *= 0.94; velX *= 0.94; dragRotY += velY; dragRotX += velX; dragRotY *= 1 - (1 - spinW) * dt * 2; dragRotX *= 1 - dt * 1.5; }
+  const mx = mouse.on ? mouse.x : 0, my = mouse.on ? mouse.y : 0;
+  world.rotation.y = spin + dragRotY + mx * 0.25;
+  world.rotation.x = -0.12 + dragRotX * spinW + my * 0.12;
 
-  const bt = (t - burstStart) / 1.4;
-  if (bt >= 0 && bt <= 1) {
-    burst.scale.setScalar(0.4 + ease(bt) * 2.8);
-    burst.material.opacity = (1 - bt) * 0.9;
-  } else burst.material.opacity = 0;
-  burst.lookAt(camera.position);
+  // кино: пролёт камеры сквозь облако осколков
+  const fly = ease(bump(s, 2, 0.75));
+  camera.position.z = 10 - fly * 8.2;
+  camera.position.x = Math.sin(t * 0.2) * 0.3 * fly;
+  camera.rotation.z = fly * 0.35 * Math.sin(s * 3);
+
+  // мышь и взрыв
+  mouseF += ((mouse.on && !dragging ? 1 : 0) - mouseF) * Math.min(1, dt * 4);
+  uniforms.uMouse.value.set(mx, my);
+  uniforms.uMouseF.value = reduce ? 0 : mouseF;
+  burst += burstV; burstV = 0;
+  burst *= Math.exp(-dt * 2.6);
+  uniforms.uBurst.value = burst;
+  glow.material.opacity = 0.32 * (1 - bump(s, 2, 1.2)) * (1 - bump(s, 3, 1)) * (1 - bump(s, 4, 1)) * lerp(1, 0.2, bump(s, 5, 1));
 
   composer.render();
-  if (firstFrame) { firstFrame = false; window.zpSceneReady && window.zpSceneReady(); }
+  if (firstFrame) { firstFrame = false; window.zpSceneReady && window.zpSceneReady(); measureAnchors(); }
 }
-let burstStart = -10;
 tick();

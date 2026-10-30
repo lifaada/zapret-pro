@@ -44,7 +44,14 @@
   }
   * { box-sizing: border-box; }
   html { scroll-behavior: smooth; background: var(--bg); overflow-x: clip; }
-  body { margin: 0; color: var(--text); font: 16px/1.65 var(--body); -webkit-font-smoothing: antialiased; overflow-x: hidden; background: var(--bg); }
+  body { margin: 0; color: var(--text); font: 16px/1.65 var(--body); -webkit-font-smoothing: antialiased; overflow-x: clip;
+         background: radial-gradient(1100px 700px at 78% 30%, rgba(139,92,246,.18), transparent 60%),
+                     radial-gradient(800px 500px at 92% 5%, rgba(34,227,238,.10), transparent 60%),
+                     radial-gradient(900px 700px at 8% 85%, rgba(59,130,246,.10), transparent 60%), var(--bg);
+         background-attachment: fixed; }
+  main, footer { position: relative; z-index: 1; }
+  #scene { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 0; display: block; pointer-events: none; }
+  #trail { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 45; pointer-events: none; mix-blend-mode: screen; }
   /* зерно поверх всего — убирает «пластиковость» градиентов */
   body::after { content: ""; position: fixed; inset: 0; z-index: 100; pointer-events: none; opacity: .07; mix-blend-mode: overlay;
     background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>"); }
@@ -93,13 +100,8 @@
   @keyframes spin { to { --a: 360deg; } }
 
   /* ---------- первый экран ---------- */
-  .hero { position: relative; min-height: 100vh; min-height: 100svh; display: flex; align-items: center; overflow: hidden;
-          background:
-            radial-gradient(1100px 700px at 78% 45%, rgba(139,92,246,.22), transparent 60%),
-            radial-gradient(800px 500px at 90% 20%, rgba(34,227,238,.12), transparent 60%),
-            radial-gradient(900px 600px at 10% 90%, rgba(59,130,246,.12), transparent 60%); }
-  .hero::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 180px; background: linear-gradient(transparent, var(--bg)); pointer-events: none; }
-  #scene, #scene2d { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  .hero { position: relative; min-height: 100vh; min-height: 100svh; display: flex; align-items: center; overflow: hidden; }
+  #scene2d { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
   #scene { opacity: 0; transition: opacity 1.2s ease; }
   #scene2d { transition: opacity 1.2s ease; }
   html.webgl #scene { opacity: 1; }
@@ -136,6 +138,32 @@
   .stat:last-child { border-right: 0; }
   .stat b { display: block; font: 700 28px/1.1 var(--display); background: linear-gradient(90deg, #fff, #b4f7ff); -webkit-background-clip: text; background-clip: text; color: transparent; }
   .stat span { color: var(--muted); font-size: 13.5px; }
+
+  /* ---------- история при прокрутке ---------- */
+  .story { position: relative; padding: 0; }
+  .story-pin { position: sticky; top: 0; height: 100vh; height: 100svh; margin-bottom: -100vh; margin-bottom: -100svh; pointer-events: none;
+               display: flex; align-items: flex-end; justify-content: center; padding: 0 24px 10vh; }
+  .story-step { height: 62vh; height: 62svh; }
+  .story-step:last-child { height: 100vh; height: 100svh; }
+  html:not(.webgl) .story-step { height: 40vh; }
+  .cap .btn { margin-top: 22px; pointer-events: auto; }
+  .cap:not(.on) .btn { pointer-events: none; }
+  .cap { position: absolute; left: 0; right: 0; bottom: 9vh; margin: 0 auto; max-width: 920px; padding: 0 24px; text-align: center;
+         opacity: 0; transform: translateY(24px); filter: blur(6px); transition: opacity .7s ease, transform .7s ease, filter .7s ease; }
+  .cap.on { opacity: 1; transform: none; filter: none; }
+  .cap h2 { margin: 14px 0 0; font-size: clamp(26px, 4.2vw, 56px); text-shadow: 0 4px 40px rgba(6,5,13,.9), 0 0 2px rgba(6,5,13,.8); }
+  .cap h2 .g { text-shadow: none; filter: drop-shadow(0 0 18px rgba(34,227,238,.35)); }
+  .cap .kicker { justify-content: center; }
+  .story-hint { position: absolute; top: 96px; left: 0; right: 0; text-align: center; font-size: 13px; color: var(--dim); letter-spacing: .5px;
+                opacity: 0; transition: opacity .6s; }
+  .story-hint.on { opacity: 1; }
+  @media (pointer: coarse) { .story-hint { display: none; } }
+  .scroll-cue { position: absolute; left: 50%; bottom: 128px; z-index: 3; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 8px;
+                font-size: 12px; color: var(--dim); letter-spacing: 2px; text-transform: uppercase; pointer-events: none; }
+  .scroll-cue i { width: 22px; height: 36px; border: 1.5px solid var(--line-2); border-radius: 12px; position: relative; }
+  .scroll-cue i::after { content: ""; position: absolute; left: 50%; top: 7px; width: 4px; height: 8px; margin-left: -2px; border-radius: 2px; background: var(--cyan);
+                         box-shadow: 0 0 8px var(--cyan); animation: cue 1.8s infinite; }
+  @keyframes cue { 0% { transform: translateY(0); opacity: 1 } 70% { transform: translateY(12px); opacity: 0 } 100% { opacity: 0 } }
 
   /* ---------- бегущая строка ---------- */
   .marquee { position: relative; overflow: hidden; padding: 26px 0; border-block: 1px solid var(--line); background: rgba(12,10,28,.6); }
@@ -294,7 +322,7 @@
   /* узкие и вытянутые по высоте экраны (телефоны, планшеты, узкие окна): сфера сверху, текст под ней */
   @media (max-width: 900px), (max-aspect-ratio: 23/20) {
     .hero { display: block; min-height: 0; }
-    #scene, #scene2d { height: 62vh; height: 62svh; -webkit-mask-image: linear-gradient(#000 70%, transparent); mask-image: linear-gradient(#000 70%, transparent); }
+    #scene2d { height: 62vh; height: 62svh; -webkit-mask-image: linear-gradient(#000 70%, transparent); mask-image: linear-gradient(#000 70%, transparent); }
     .hero-grid-bg { height: 62vh; }
     /* текст под сферой на затемнении, чтобы читался */
     .hero-content { padding: 52vh 0 34px; max-width: none; }
@@ -302,6 +330,8 @@
       background: linear-gradient(180deg, transparent, rgba(6,5,13,.86) 18%, rgba(6,5,13,.94)); }
     h1 .l1, h1 .l2 { white-space: normal; }
     .stats { position: relative; bottom: auto; padding-bottom: 40px; }
+    .scroll-cue { display: none; }
+    .cap { bottom: 7vh; }
     .stats .row { grid-template-columns: repeat(2, 1fr); }
     .stat:nth-child(2) { border-right: 0; }
     .stat:nth-child(-n+2) { border-bottom: 1px solid var(--line); }
@@ -330,6 +360,8 @@
 <script type="importmap">{ "imports": { "three": "./js/three.module.min.js", "three/addons/": "./js/addons/" } }</script>
 </head>
 <body>
+<canvas id="scene" aria-hidden="true"></canvas>
+<canvas id="trail" aria-hidden="true"></canvas>
 
 <header>
   <div class="wrap">
@@ -347,10 +379,10 @@
 
 <main>
   <!-- ======== ПЕРВЫЙ ЭКРАН ======== -->
-  <div class="hero">
+  <div class="hero" data-stage="0">
     <div class="hero-grid-bg"></div>
     <canvas id="scene2d" aria-hidden="true"></canvas>
-    <canvas id="scene" aria-label="Голографическая сфера: потоки данных обходят блокировку, замок открывается"></canvas>
+    <div class="scroll-cue"><i></i>Листайте</div>
     <div class="wrap" style="width:100%">
       <div class="hero-content">
         <span class="badge"><i></i>Версия <span data-ver>1.2</span> <s>· обновлена <span data-date>недавно</span></s></span>
@@ -379,6 +411,22 @@
     </div>
   </div>
 
+  <!-- ======== ИСТОРИЯ: частицы меняют форму по ходу прокрутки ======== -->
+  <section class="story" aria-label="Как работает обход: история в четырёх сценах">
+    <div class="story-pin">
+      <div class="story-hint">Крутите частицы мышью · кликните — и они разлетятся</div>
+      <div class="cap" data-cap="1"><span class="kicker">01 · Блокировка</span><h2>Провайдер вешает <span class="g">замок</span> на&nbsp;Discord и&nbsp;YouTube</h2></div>
+      <div class="cap" data-cap="2"><span class="kicker">02 · Обход</span><h2>Zapret Pro разбирает блокировку <span class="g">на&nbsp;атомы</span></h2></div>
+      <div class="cap" data-cap="3"><span class="kicker">03 · Свобода</span><h2>…и собирает интернет <span class="g">заново</span></h2></div>
+      <div class="cap" data-cap="4"><span class="kicker">04 · Готово</span><h2>Видео и голос — <span class="g">снова с&nbsp;вами</span></h2>
+        <a class="btn btn-neon btn-xl" href="ZapretProSetup.exe" download>Скачать бесплатно</a></div>
+    </div>
+    <div class="story-step" data-stage="1" data-step="1"></div>
+    <div class="story-step" data-stage="2" data-step="2"></div>
+    <div class="story-step" data-stage="3" data-step="3"></div>
+    <div class="story-step" data-stage="4" data-step="4"></div>
+  </section>
+
   <div class="marquee" aria-hidden="true">
     <div class="track">
       <span class="hl">Discord</span><span>Голос и стримы</span><span class="hl">YouTube</span><span>Видео без замедления</span><span class="hl">Google</span><span>Ваши сайты</span><span>Windows 7 · 8 · 10 · 11</span><span>Без VPN</span>
@@ -387,7 +435,7 @@
   </div>
 
   <!-- ======== ДЕМОНСТРАЦИЯ ======== -->
-  <section id="demo-sec">
+  <section id="demo-sec" data-stage="5">
     <div class="wrap demo-grid">
       <div class="reveal">
         <span class="kicker">Живая демонстрация</span>
@@ -585,7 +633,7 @@
   <!-- ======== ФИНАЛ ======== -->
   <section style="padding-top:20px">
     <div class="wrap">
-      <div class="final glass reveal">
+      <div class="final glass reveal" data-stage="6">
         <span class="kicker">Бесплатно навсегда</span>
         <h2>Интернет <span class="g">без блокировок</span></h2>
         <p class="sub">Установка — меньше минуты. Настройка — до трёх. Дальше всё работает само.</p>
@@ -607,8 +655,9 @@
   </div>
 </footer>
 
-<script src="js/page.js"></script>
-<script src="js/sphere2d.js"></script>
+<script>var ZP_ASSETS = "10";</script>
+<script src="js/page.js?v=4"></script>
+<script src="js/sphere2d.js?v=4"></script>
 <script>
 // Сначала мгновенно рисуется 2D-сфера; 3D (WebGL) грузится следом и плавно её заменяет.
 // Нет WebGL, старый браузер, ошибка или 3D не успела за 8 секунд — остаётся 2D.
@@ -628,7 +677,7 @@
   };
   window.zpSceneReady = function () { if (done) return; done = true; document.documentElement.classList.add('webgl'); window.zp2dStop = true; };
   setTimeout(function () { if (!done) window.zpSceneFail('3D грузится слишком долго'); }, 8000);
-  import('./js/scene.js').catch(window.zpSceneFail);
+  import('./js/scene.js?v=' + ZP_ASSETS).catch(window.zpSceneFail);
 })();
 </script>
 </body>

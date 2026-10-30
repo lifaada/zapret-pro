@@ -115,6 +115,21 @@
     reset();
   }
 
+  // ---------- История: подписи меняются вместе с формой частиц ----------
+  const caps = $$('.cap'), hint = $('.story-hint'), steps = $$('.story-step');
+  if (steps.length) {
+    const update = () => {
+      const mid = innerHeight / 2;
+      let active = 0;
+      steps.forEach(st => { const r = st.getBoundingClientRect(); if (r.top < mid && r.bottom > mid) active = +st.dataset.step; });
+      caps.forEach(c => c.classList.toggle('on', +c.dataset.cap === active));
+      if (hint) hint.classList.toggle('on', active > 0 && document.documentElement.classList.contains('webgl'));
+    };
+    addEventListener('scroll', update, { passive: true });
+    addEventListener('resize', update);
+    update();
+  }
+
   // ---------- Счётчики ----------
   const cio = new IntersectionObserver(es => es.forEach(e => {
     if (!e.isIntersecting) return;
